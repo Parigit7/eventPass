@@ -68,10 +68,72 @@ exports.createBooking = async (req, res) => {
 // @access  Private
 exports.getMyBookings = async (req, res) => {
     try {
-        const bookings = await Booking.find({ user: req.user.id })
+        const { search } = req.query;
+        let query = { user: req.user.id };
+
+        const bookings = await Booking.find(query)
             .populate('event', 'title date location image')
             .sort('-createdAt');
-        res.json(bookings);
+
+        // Filter by event name or booking ID if search is provided
+        let filteredBookings = bookings;
+        if (search) {
+            const searchLower = search.toLowerCase();
+            filteredBookings = bookings.filter(b => 
+                (b.event && b.event.title.toLowerCase().includes(searchLower)) || 
+                b.bookingId.toLowerCase().includes(searchLower)
+            );
+        }
+
+        res.json(filteredBookings);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// @desc    Get all bookings (Admin)
+// @route   GET /api/bookings
+// @access  Private/Admin
+exports.getAllBookings = async (req, res) => {
+    try {
+        const { search } = req.query;
+        const bookings = await Booking.find()
+            .populate('user', 'name email')
+            .populate('event', 'title date location')
+            .sort('-createdAt');
+
+        let filteredBookings = bookings;
+        if (search) {
+            const searchLower = search.toLowerCase();
+            filteredBookings = bookings.filter(b => 
+                (b.event && b.event.title.toLowerCase().includes(searchLower)) || 
+                b.bookingId.toLowerCase().includes(searchLower) ||
+                (b.user && b.user.email.toLowerCase().includes(searchLower))
+            );
+        }
+
+        res.json(filteredBookings);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// @desc    Update booking status (Admin)
+// @route   PUT /api/bookings/:id/status
+// @access  Private/Admin
+exports.updateBookingStatus = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const booking = await Booking.findById(req.params.id);
+
+        if (!booking) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        booking.status = status;
+        await booking.save();
+
+        res.json({ success: true, booking });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

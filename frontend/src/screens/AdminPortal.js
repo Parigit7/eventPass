@@ -29,6 +29,9 @@ const AdminPortal = ({ navigation }) => {
     const [stats, setStats] = useState({ activeEvents: 0, pastEvents: 0, totalBookings: 0 });
     const [users, setUsers] = useState([]);
     const [usersLoading, setUsersLoading] = useState(false);
+    const [bookings, setBookings] = useState([]);
+    const [bookingsLoading, setBookingsLoading] = useState(false);
+    const [bookingSearch, setBookingSearch] = useState('');
 
     // Form States
     const [title, setTitle] = useState('');
@@ -73,6 +76,30 @@ const AdminPortal = ({ navigation }) => {
         }
     }, []);
 
+    const fetchAllBookings = useCallback(async () => {
+        setBookingsLoading(true);
+        try {
+            const response = await axiosInstance.get(`/bookings?search=${bookingSearch}`);
+            setBookings(response.data);
+        } catch (error) {
+            console.error('Bookings fetch failed:', error);
+        } finally {
+            setBookingsLoading(false);
+        }
+    }, [bookingSearch]);
+
+    const updateBookingStatus = async (bookingId, currentStatus) => {
+        const nextStatus = currentStatus === 'confirmed' ? 'hand over' : 'confirmed';
+        try {
+            const response = await axiosInstance.put(`/bookings/${bookingId}/status`, { status: nextStatus });
+            if (response.data.success) {
+                setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, status: nextStatus } : b));
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to update status');
+        }
+    };
+
     const toggleUserStatus = async (userId) => {
         try {
             const response = await axiosInstance.put(`/auth/users/${userId}/toggle`);
@@ -104,7 +131,10 @@ const AdminPortal = ({ navigation }) => {
         if (activeTab === 'Users') {
             fetchUsers();
         }
-    }, [activeTab, fetchEvents, fetchStats, fetchUsers]);
+        if (activeTab === 'Bookings') {
+            fetchAllBookings();
+        }
+    }, [activeTab, fetchEvents, fetchStats, fetchUsers, fetchAllBookings]);
 
     const handleLogout = async () => {
         await AsyncStorage.clear();
@@ -382,6 +412,58 @@ const AdminPortal = ({ navigation }) => {
                 </View>
             )}
 
+            {activeTab === 'Bookings' && (
+                <View style={styles.content}>
+                    <Text style={styles.sectionTitle}>Booking Management</Text>
+                    <View style={styles.searchBar}>
+                        <Ionicons name="search-outline" size={20} color="#666" />
+                        <TextInput 
+                            style={styles.searchInput} 
+                            placeholder="Find by ID, Event or User Email..." 
+                            placeholderTextColor="#666"
+                            value={bookingSearch}
+                            onChangeText={setBookingSearch}
+                        />
+                    </View>
+
+                    {bookingsLoading ? (
+                        <ActivityIndicator color="#FFD301" size="large" />
+                    ) : (
+                        <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
+                            {bookings.map(booking => (
+                                <View key={booking._id} style={styles.bookingManageCard}>
+                                    <View style={styles.bookingManageHeader}>
+                                        <View>
+                                            <Text style={styles.bookingManageId}>{booking.bookingId}</Text>
+                                            <Text style={styles.bookingManageUser}>{booking.user?.name} ({booking.user?.email})</Text>
+                                        </View>
+                                        <View style={[styles.statusBadge, { backgroundColor: booking.status === 'confirmed' ? '#4CAF5022' : '#FF980022' }]}>
+                                            <Text style={[styles.statusText, { color: booking.status === 'confirmed' ? '#4CAF50' : '#FF9800' }]}>
+                                                {booking.status.toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.bookingManageEvent}>{booking.event?.title}</Text>
+                                    
+                                    <View style={styles.bookingManageFooter}>
+                                        <Text style={styles.bookingManagePrice}>Rs. {booking.totalPrice}</Text>
+                                        <TouchableOpacity 
+                                            style={[styles.statusBtn, booking.status === 'confirmed' ? styles.activateBtn : styles.deactivateBtn]}
+                                            onPress={() => updateBookingStatus(booking._id, booking.status)}
+                                        >
+                                            <Text style={[styles.statusBtnText, booking.status === 'confirmed' ? styles.activateText : styles.deactivateText]}>
+                                                {booking.status === 'confirmed' ? 'Mark Hand Over' : 'Mark Confirmed'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    )}
+                </View>
+            )}
+
             {activeTab === 'Users' && (
                 <View style={styles.content}>
                     <Text style={styles.sectionTitle}>User Management</Text>
@@ -430,15 +512,12 @@ const AdminPortal = ({ navigation }) => {
                                     </View>
                                 </View>
                             ))}
-                            {users.length === 0 && (
-                                <Text style={styles.placeholderText}>No registered users yet</Text>
-                            )}
                         </ScrollView>
                     )}
                 </View>
             )}
 
-            {!['Dashboard', 'Events', 'Users'].includes(activeTab) && (
+            {!['Dashboard', 'Events', 'Users', 'Bookings'].includes(activeTab) && (
                 <View style={styles.placeholderContent}>
                     <Ionicons name="construct-outline" size={60} color="#333" />
                     <Text style={styles.placeholderText}>{activeTab} Module Coming Soon</Text>
@@ -575,6 +654,17 @@ const styles = StyleSheet.create({
     statusDot: { width: 10, height: 10, borderRadius: 5 },
     dotActive: { backgroundColor: '#4CAF50', boxShadow: '0 0 8px #4CAF50' },
     dotInactive: { backgroundColor: '#F44336', boxShadow: '0 0 8px #F44336' },
+
+    // Booking Manage Card Styles
+    bookingManageCard: { backgroundColor: '#111', borderRadius: 20, padding: 20, marginBottom: 15, borderWidth: 1, borderColor: '#222' },
+    bookingManageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+    bookingManageId: { color: '#FFD301', fontSize: 16, fontWeight: 'bold' },
+    bookingManageUser: { color: '#666', fontSize: 12, marginTop: 2 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+    statusText: { fontSize: 10, fontWeight: 'bold' },
+    bookingManageEvent: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
+    bookingManageFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#222', paddingTop: 15 },
+    bookingManagePrice: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
 });
 
 export default AdminPortal;
