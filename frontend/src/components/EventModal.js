@@ -1,7 +1,7 @@
-import React from 'react';
 import { 
     StyleSheet, Text, View, TouchableOpacity, SafeAreaView, 
-    ScrollView, TextInput, Image, Modal, ActivityIndicator, Platform 
+    ScrollView, TextInput, Image, Modal, ActivityIndicator, Platform,
+    KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -15,176 +15,184 @@ const EventModal = ({
     return (
         <Modal visible={visible} animationType="slide">
             <SafeAreaView style={styles.modalContainer}>
-                <View style={styles.modalHeader}>
-                    <TouchableOpacity onPress={onClose}>
-                        <Ionicons name="close" size={28} color="#FFF" />
-                    </TouchableOpacity>
-                    <Text style={styles.modalTitle}>{editingEvent ? 'Edit Event' : 'New Event'}</Text>
-                    <TouchableOpacity onPress={handleSubmit} disabled={loading}>
-                        {loading ? <ActivityIndicator color="#FFD301" /> : <Text style={styles.saveBtn}>Save</Text>}
-                    </TouchableOpacity>
-                </View>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={onClose}>
+                            <Ionicons name="close" size={28} color="#FFF" />
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>{editingEvent ? 'Edit Event' : 'New Event'}</Text>
+                        <TouchableOpacity onPress={handleSubmit} disabled={loading}>
+                            {loading ? <ActivityIndicator color="#FFD301" /> : <Text style={styles.saveBtn}>Save</Text>}
+                        </TouchableOpacity>
+                    </View>
 
-                <ScrollView style={styles.modalForm}>
-                    <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-                        {image ? (
-                            <Image source={{ uri: image }} style={styles.previewImage} />
-                        ) : (
-                            <View style={styles.imagePlaceholder}>
-                                <Ionicons name="image-outline" size={40} color="#666" />
-                                <Text style={styles.imagePlaceholderText}>Upload Event Banner</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-
-                    <Text style={styles.modalLabel}>Event Title</Text>
-                    <TextInput 
-                        style={styles.modalInput} 
-                        value={title} 
-                        onChangeText={setTitle} 
-                        placeholder="Concert, Festival, etc." 
-                        placeholderTextColor="#444" 
-                    />
-
-                    <View style={styles.dateTimeRow}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.modalLabel}>Date</Text>
-                            {Platform.OS === 'web' ? (
-                                <View style={styles.manualInputContainer}>
-                                    <TextInput 
-                                        style={[styles.modalInput, { flex: 1, marginBottom: 0 }]} 
-                                        value={date instanceof Date ? date.toISOString().split('T')[0] : date} 
-                                        onChangeText={(v) => {
-                                            const newDate = new Date(v);
-                                            if (!isNaN(newDate)) setDate(newDate);
-                                            else setDate(v);
-                                        }}
-                                        placeholder="YYYY-MM-DD"
-                                        placeholderTextColor="#444"
-                                    />
-                                    <TouchableOpacity 
-                                        style={styles.pickerIconBtn} 
-                                        onPress={() => {
-                                            const input = document.createElement('input');
-                                            input.type = 'date';
-                                            input.onchange = (e) => setDate(new Date(e.target.value));
-                                            input.showPicker();
-                                        }}
-                                    >
-                                        <Ionicons name="calendar-outline" size={20} color="#FFD301" />
-                                    </TouchableOpacity>
-                                </View>
+                    <ScrollView 
+                        style={styles.modalForm} 
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 100 }}
+                    >
+                        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+                            {image ? (
+                                <Image source={{ uri: image }} style={styles.previewImage} />
                             ) : (
-                                <>
-                                    <TouchableOpacity style={styles.modalInput} onPress={() => setShowDatePicker(true)}>
-                                        <Text style={{ color: '#FFF' }}>{date instanceof Date ? date.toLocaleDateString() : date}</Text>
-                                    </TouchableOpacity>
-                                    {showDatePicker && (
-                                        <DateTimePicker
-                                            value={date instanceof Date ? date : new Date()}
-                                            mode="date"
-                                            onChange={(e, selectedDate) => {
-                                                setShowDatePicker(false);
-                                                if (selectedDate) setDate(selectedDate);
+                                <View style={styles.imagePlaceholder}>
+                                    <Ionicons name="image-outline" size={40} color="#666" />
+                                    <Text style={styles.imagePlaceholderText}>Upload Event Banner</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+
+                        <Text style={styles.modalLabel}>Event Title</Text>
+                        <TextInput 
+                            style={styles.modalInput} 
+                            value={title} 
+                            onChangeText={setTitle} 
+                            placeholder="Concert, Festival, etc." 
+                            placeholderTextColor="#444" 
+                        />
+
+                        <View style={styles.dateTimeRow}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.modalLabel}>Date</Text>
+                                {Platform.OS === 'web' ? (
+                                    <View style={styles.manualInputContainer}>
+                                        <TextInput 
+                                            style={[styles.modalInput, { flex: 1, marginBottom: 0 }]} 
+                                            value={date instanceof Date ? date.toISOString().split('T')[0] : date} 
+                                            onChangeText={(v) => {
+                                                const newDate = new Date(v);
+                                                if (!isNaN(newDate)) setDate(newDate);
+                                                else setDate(v);
                                             }}
+                                            placeholder="YYYY-MM-DD"
+                                            placeholderTextColor="#444"
                                         />
-                                    )}
-                                </>
-                            )}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.modalLabel}>Time</Text>
-                            {Platform.OS === 'web' ? (
-                                <input 
-                                    type="time" 
-                                    value={time} 
-                                    onChange={(e) => setTime(e.target.value)}
-                                    style={styles.webDateInput}
-                                />
-                            ) : (
-                                <TextInput 
-                                    style={styles.modalInput} 
-                                    value={time} 
-                                    onChangeText={setTime} 
-                                    placeholder="18:00" 
-                                    placeholderTextColor="#444" 
-                                />
-                            )}
-                        </View>
-                    </View>
-
-                    <Text style={styles.modalLabel}>Location</Text>
-                    <TextInput 
-                        style={styles.modalInput} 
-                        value={location} 
-                        onChangeText={setLocation} 
-                        placeholder="City Hall, Stadium, etc." 
-                        placeholderTextColor="#444" 
-                    />
-
-                    <Text style={styles.modalLabel}>Description</Text>
-                    <TextInput 
-                        style={[styles.modalInput, { height: 100 }]} 
-                        value={description} 
-                        onChangeText={setDescription} 
-                        multiline 
-                        numberOfLines={4} 
-                        placeholder="Describe your event..." 
-                        placeholderTextColor="#444" 
-                    />
-
-                    <View style={styles.ticketSection}>
-                        <View style={styles.ticketHeader}>
-                            <Text style={styles.modalLabel}>Ticket Pricing</Text>
-                            <TouchableOpacity onPress={addTicketRow}>
-                                <Ionicons name="add-circle" size={24} color="#FFD301" />
-                            </TouchableOpacity>
-                        </View>
-                        {tickets.map((t, index) => (
-                            <View key={index} style={styles.ticketCard}>
-                                <View style={styles.ticketTopRow}>
-                                    <TextInput 
-                                        style={[styles.modalInput, styles.ticketNameInput]} 
-                                        value={t.type} 
-                                        onChangeText={(v) => updateTicketRow(index, 'type', v)}
-                                        placeholder="Ticket Name (e.g. VIP)"
-                                        placeholderTextColor="#444"
-                                    />
-                                    {tickets.length > 1 && (
-                                        <TouchableOpacity onPress={() => removeTicketRow(index)} style={styles.removeBtn}>
-                                            <Ionicons name="close-circle" size={24} color="#f44336" />
+                                        <TouchableOpacity 
+                                            style={styles.pickerIconBtn} 
+                                            onPress={() => {
+                                                const input = document.createElement('input');
+                                                input.type = 'date';
+                                                input.onchange = (e) => setDate(new Date(e.target.value));
+                                                input.showPicker();
+                                            }}
+                                        >
+                                            <Ionicons name="calendar-outline" size={20} color="#FFD301" />
                                         </TouchableOpacity>
-                                    )}
-                                </View>
-                                <View style={styles.ticketBottomRow}>
-                                    <View style={styles.priceContainer}>
-                                        <Text style={styles.inputPrefix}>$</Text>
-                                        <TextInput 
-                                            style={[styles.modalInput, styles.ticketSubInput]} 
-                                            value={t.price} 
-                                            onChangeText={(v) => updateTicketRow(index, 'price', v)}
-                                            placeholder="Price"
-                                            placeholderTextColor="#444"
-                                            keyboardType="numeric"
-                                        />
                                     </View>
-                                    <View style={styles.qtyContainer}>
-                                        <Text style={styles.inputPrefix}>Qty</Text>
-                                        <TextInput 
-                                            style={[styles.modalInput, styles.ticketSubInput]} 
-                                            value={t.quantity} 
-                                            onChangeText={(v) => updateTicketRow(index, 'quantity', v)}
-                                            placeholder="Quantity"
-                                            placeholderTextColor="#444"
-                                            keyboardType="numeric"
-                                        />
-                                    </View>
-                                </View>
+                                ) : (
+                                    <>
+                                        <TouchableOpacity style={styles.modalInput} onPress={() => setShowDatePicker(true)}>
+                                            <Text style={{ color: '#FFF' }}>{date instanceof Date ? date.toLocaleDateString() : date}</Text>
+                                        </TouchableOpacity>
+                                        {showDatePicker && (
+                                            <DateTimePicker
+                                                value={date instanceof Date ? date : new Date()}
+                                                mode="date"
+                                                onChange={(e, selectedDate) => {
+                                                    setShowDatePicker(false);
+                                                    if (selectedDate) setDate(selectedDate);
+                                                }}
+                                            />
+                                        )}
+                                    </>
+                                )}
                             </View>
-                        ))}
-                    </View>
-                    <View style={{ height: 50 }} />
-                </ScrollView>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.modalLabel}>Time</Text>
+                                {Platform.OS === 'web' ? (
+                                    <input 
+                                        type="time" 
+                                        value={time} 
+                                        onChange={(e) => setTime(e.target.value)}
+                                        style={styles.webDateInput}
+                                    />
+                                ) : (
+                                    <TextInput 
+                                        style={styles.modalInput} 
+                                        value={time} 
+                                        onChangeText={setTime} 
+                                        placeholder="18:00" 
+                                        placeholderTextColor="#444" 
+                                    />
+                                )}
+                            </View>
+                        </View>
+
+                        <Text style={styles.modalLabel}>Location</Text>
+                        <TextInput 
+                            style={styles.modalInput} 
+                            value={location} 
+                            onChangeText={setLocation} 
+                            placeholder="City Hall, Stadium, etc." 
+                            placeholderTextColor="#444" 
+                        />
+
+                        <Text style={styles.modalLabel}>Description</Text>
+                        <TextInput 
+                            style={[styles.modalInput, { height: 100 }]} 
+                            value={description} 
+                            onChangeText={setDescription} 
+                            multiline 
+                            numberOfLines={4} 
+                            placeholder="Describe your event..." 
+                            placeholderTextColor="#444" 
+                        />
+
+                        <View style={styles.ticketSection}>
+                            <View style={styles.ticketHeader}>
+                                <Text style={styles.modalLabel}>Ticket Pricing</Text>
+                                <TouchableOpacity onPress={addTicketRow}>
+                                    <Ionicons name="add-circle" size={24} color="#FFD301" />
+                                </TouchableOpacity>
+                            </View>
+                            {tickets.map((t, index) => (
+                                <View key={index} style={styles.ticketCard}>
+                                    <View style={styles.ticketTopRow}>
+                                        <TextInput 
+                                            style={[styles.modalInput, styles.ticketNameInput]} 
+                                            value={t.type} 
+                                            onChangeText={(v) => updateTicketRow(index, 'type', v)}
+                                            placeholder="Ticket Name (e.g. VIP)"
+                                            placeholderTextColor="#444"
+                                        />
+                                        {tickets.length > 1 && (
+                                            <TouchableOpacity onPress={() => removeTicketRow(index)} style={styles.removeBtn}>
+                                                <Ionicons name="close-circle" size={24} color="#f44336" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                    <View style={styles.ticketBottomRow}>
+                                        <View style={styles.priceContainer}>
+                                            <Text style={styles.inputPrefix}>$</Text>
+                                            <TextInput 
+                                                style={[styles.modalInput, styles.ticketSubInput]} 
+                                                value={t.price} 
+                                                onChangeText={(v) => updateTicketRow(index, 'price', v)}
+                                                placeholder="Price"
+                                                placeholderTextColor="#444"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={styles.qtyContainer}>
+                                            <Text style={styles.inputPrefix}>Qty</Text>
+                                            <TextInput 
+                                                style={[styles.modalInput, styles.ticketSubInput]} 
+                                                value={t.quantity} 
+                                                onChangeText={(v) => updateTicketRow(index, 'quantity', v)}
+                                                placeholder="Quantity"
+                                                placeholderTextColor="#444"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    </ScrollView>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         </Modal>
     );
