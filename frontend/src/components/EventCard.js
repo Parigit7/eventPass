@@ -1,14 +1,16 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import axiosInstance from '../api/axios';
 
 const EventCard = ({ event, eventType, onEdit, onDelete, onView }) => {
+    const imageUrl = event.image ? `${axiosInstance.defaults.baseURL.replace('/api', '')}${event.image}` : null;
+
     return (
         <View style={styles.eventCard}>
             <Image 
-                source={event.image ? { uri: `http://localhost:5000${event.image}` } : null} 
+                source={imageUrl ? { uri: imageUrl } : null} 
                 style={styles.eventImage} 
-                defaultSource={require('../../assets/adaptive-icon.png')} // Fallback if no image
             />
             <View style={styles.eventInfo}>
                 <Text style={styles.eventTitle}>{event.title}</Text>

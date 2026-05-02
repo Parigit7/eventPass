@@ -50,20 +50,38 @@ const EventModal = ({
                         <View style={{ flex: 1 }}>
                             <Text style={styles.modalLabel}>Date</Text>
                             {Platform.OS === 'web' ? (
-                                <input 
-                                    type="date" 
-                                    value={date.toISOString().split('T')[0]} 
-                                    onChange={(e) => setDate(new Date(e.target.value))}
-                                    style={styles.webDateInput}
-                                />
+                                <View style={styles.manualInputContainer}>
+                                    <TextInput 
+                                        style={[styles.modalInput, { flex: 1, marginBottom: 0 }]} 
+                                        value={date instanceof Date ? date.toISOString().split('T')[0] : date} 
+                                        onChangeText={(v) => {
+                                            const newDate = new Date(v);
+                                            if (!isNaN(newDate)) setDate(newDate);
+                                            else setDate(v);
+                                        }}
+                                        placeholder="YYYY-MM-DD"
+                                        placeholderTextColor="#444"
+                                    />
+                                    <TouchableOpacity 
+                                        style={styles.pickerIconBtn} 
+                                        onPress={() => {
+                                            const input = document.createElement('input');
+                                            input.type = 'date';
+                                            input.onchange = (e) => setDate(new Date(e.target.value));
+                                            input.showPicker();
+                                        }}
+                                    >
+                                        <Ionicons name="calendar-outline" size={20} color="#FFD301" />
+                                    </TouchableOpacity>
+                                </View>
                             ) : (
                                 <>
                                     <TouchableOpacity style={styles.modalInput} onPress={() => setShowDatePicker(true)}>
-                                        <Text style={{ color: '#FFF' }}>{date.toLocaleDateString()}</Text>
+                                        <Text style={{ color: '#FFF' }}>{date instanceof Date ? date.toLocaleDateString() : date}</Text>
                                     </TouchableOpacity>
                                     {showDatePicker && (
                                         <DateTimePicker
-                                            value={date}
+                                            value={date instanceof Date ? date : new Date()}
                                             mode="date"
                                             onChange={(e, selectedDate) => {
                                                 setShowDatePicker(false);
@@ -198,6 +216,8 @@ const styles = StyleSheet.create({
         fontFamily: 'inherit'
     },
     dateTimeRow: { flexDirection: 'row', gap: 15 },
+    manualInputContainer: { flexDirection: 'row', alignItems: 'center', position: 'relative', marginBottom: 20 },
+    pickerIconBtn: { position: 'absolute', right: 15, padding: 5 },
     ticketSection: { marginTop: 10 },
     ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     ticketCard: { backgroundColor: '#111', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#222' },

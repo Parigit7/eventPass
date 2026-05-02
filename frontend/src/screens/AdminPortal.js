@@ -115,8 +115,21 @@ const AdminPortal = ({ navigation }) => {
 
         setModalLoading(true);
         const formData = new FormData();
+        
+        // Handle manual date entry
+        let finalDate = date;
+        if (typeof date === 'string') {
+            const parsed = new Date(date);
+            if (isNaN(parsed.getTime())) {
+                Alert.alert('Error', 'Please enter a valid date (YYYY-MM-DD)');
+                setModalLoading(false);
+                return;
+            }
+            finalDate = parsed;
+        }
+
         formData.append('title', title);
-        formData.append('date', date.toISOString());
+        formData.append('date', finalDate.toISOString());
         formData.append('time', time);
         formData.append('location', location);
         formData.append('description', description);
