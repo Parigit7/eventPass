@@ -18,7 +18,11 @@ const RegisterScreen = ({ navigation }) => {
 
         setLoading(true);
         try {
-            await axiosInstance.post('/auth/register', { name, email, password });
+            await axiosInstance.post('/auth/register', { 
+                name: name.trim(), 
+                email: email.trim(), 
+                password: password.trim() 
+            });
             Alert.alert('Success', 'Account Created Successfully! Please Login.');
             navigation.navigate('Login');
         } catch (error) {

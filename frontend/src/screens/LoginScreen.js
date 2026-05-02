@@ -18,7 +18,12 @@ const LoginScreen = ({ navigation }) => {
 
         setLoading(true);
         try {
-            const response = await axiosInstance.post('/auth/login', { email, password });
+            const trimmedEmail = email.trim();
+            const trimmedPassword = password.trim();
+            const response = await axiosInstance.post('/auth/login', { 
+                email: trimmedEmail, 
+                password: trimmedPassword 
+            });
             const { token, user } = response.data;
 
             await AsyncStorage.setItem('token', token);
@@ -30,7 +35,9 @@ const LoginScreen = ({ navigation }) => {
                 navigation.replace('UserPortal');
             }
         } catch (error) {
-            Alert.alert('Login Failed', error.response?.data?.error || 'Invalid credentials');
+            console.error('Login Error:', error);
+            const errorMessage = error.response?.data?.error || error.message || 'Check your internet connection';
+            Alert.alert('Login Failed', errorMessage);
         } finally {
             setLoading(false);
         }

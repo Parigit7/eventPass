@@ -31,6 +31,9 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
+        console.log('--- Login Attempt ---');
+        console.log('Email:', `"${email}"`);
+        console.log('Password Length:', password?.length);
 
         // Validate email & password
         if (!email || !password) {
