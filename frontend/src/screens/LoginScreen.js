@@ -3,22 +3,29 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityInd
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import axiosInstance from '../api/axios';
+import StatusModal from '../components/StatusModal';
 
 const LoginScreen = ({ navigation }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [statusModal, setStatusModal] = useState({ visible: false, type: '', title: '', message: '' });
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Please fill all fields');
+            setStatusModal({ visible: true, type: 'error', title: 'Missing Info', message: 'Please enter both email and password.' });
             return;
         }
 
         setLoading(true);
         try {
-            const response = await axiosInstance.post('/auth/login', { email, password });
+            const trimmedEmail = email.trim();
+            const trimmedPassword = password.trim();
+            const response = await axiosInstance.post('/auth/login', { 
+                email: trimmedEmail, 
+                password: trimmedPassword 
+            });
             const { token, user } = response.data;
 
             await AsyncStorage.setItem('token', token);
@@ -30,7 +37,9 @@ const LoginScreen = ({ navigation }) => {
                 navigation.replace('UserPortal');
             }
         } catch (error) {
-            Alert.alert('Login Failed', error.response?.data?.error || 'Invalid credentials');
+            console.error('Login Error:', error);
+            const errorMessage = error.response?.data?.error || error.message || 'Check your internet connection';
+            setStatusModal({ visible: true, type: 'error', title: 'Login Failed', message: errorMessage });
         } finally {
             setLoading(false);
         }
@@ -114,6 +123,13 @@ const LoginScreen = ({ navigation }) => {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+            <StatusModal 
+                visible={statusModal.visible}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                onClose={() => setStatusModal({ ...statusModal, visible: false })}
+            />
         </SafeAreaView>
     );
 };

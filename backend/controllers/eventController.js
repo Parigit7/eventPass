@@ -1,4 +1,6 @@
 const Event = require('../models/Event');
+const User = require('../models/User');
+const Booking = require('../models/Booking');
 
 // Create Event
 exports.createEvent = async (req, res) => {
@@ -7,10 +9,19 @@ exports.createEvent = async (req, res) => {
         console.log('Body:', req.body);
         console.log('File:', req.file);
 
-        const { title, date, location, description, tickets } = req.body;
+        const { title, date, time, location, description, tickets } = req.body;
         
         if (!title || !date || !location || !description) {
             return res.status(400).json({ error: 'Title, Date, Location, and Description are required' });
+        }
+
+        const eventDate = new Date(date);
+        const tomorrow = new Date();
+        tomorrow.setHours(0, 0, 0, 0);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        if (eventDate < tomorrow) {
+            return res.status(400).json({ error: 'Event date must be tomorrow or later' });
         }
 
         // Parse tickets if they come as string
@@ -34,6 +45,7 @@ exports.createEvent = async (req, res) => {
         const newEvent = new Event({
             title,
             date: new Date(date),
+            time,
             location,
             description,
             tickets: ticketsWithRemaining,
@@ -86,28 +98,51 @@ exports.updateEvent = async (req, res) => {
         const diffTime = Math.abs(new Date() - event.createdAt);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        if (event.date <= today) {
-            return res.status(403).json({ error: 'Cannot edit old events' });
-        }
-
-        if (diffDays > 3) {
-            return res.status(403).json({ error: 'Editing window (3 days) has expired' });
-        }
-
-        const { title, date, location, description, tickets } = req.body;
+        // Remove restrictive editing windows for Admin
+        const { title, date, time, location, description, tickets } = req.body;
         if (title) event.title = title;
         if (date) event.date = date;
+        if (time) event.time = time;
         if (location) event.location = location;
         if (description) event.description = description;
         if (tickets) {
             const parsedTickets = typeof tickets === 'string' ? JSON.parse(tickets) : tickets;
-            event.tickets = parsedTickets.map(t => ({
-                ...t,
-                remainingQuantity: t.quantity
-            }));
+            
+            // Validate first: Ensure new total isn't less than already sold
+            for (const newTicket of parsedTickets) {
+                const existingTicket = event.tickets.find(et => et.type === newTicket.type);
+                if (existingTicket) {
+                    const soldCount = existingTicket.quantity - existingTicket.remainingQuantity;
+                    if (parseInt(newTicket.quantity) < soldCount) {
+                        return res.status(400).json({ 
+                            error: `This number of (${soldCount}) ${newTicket.type} tickets already sold` 
+                        });
+                    }
+                }
+            }
+
+            // Smart update for tickets to preserve sold counts
+            event.tickets = parsedTickets.map(newTicket => {
+                const existingTicket = event.tickets.find(et => et.type === newTicket.type);
+                
+                if (existingTicket) {
+                    const soldCount = existingTicket.quantity - existingTicket.remainingQuantity;
+                    const newTotal = parseInt(newTicket.quantity);
+                    const newRemaining = Math.max(0, newTotal - soldCount);
+                    
+                    return {
+                        ...newTicket,
+                        quantity: newTotal,
+                        remainingQuantity: newRemaining
+                    };
+                } else {
+                    return {
+                        ...newTicket,
+                        quantity: parseInt(newTicket.quantity),
+                        remainingQuantity: parseInt(newTicket.quantity)
+                    };
+                }
+            });
         }
         if (req.file) event.image = `/uploads/${req.file.filename}`;
 
@@ -140,6 +175,31 @@ exports.deleteEvent = async (req, res) => {
 
         await Event.findByIdAndDelete(req.params.id);
         res.json({ message: 'Event deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+// Get Event Stats
+exports.getStats = async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const activeEvents = await Event.countDocuments({ date: { $gte: today } });
+        const pastEvents = await Event.countDocuments({ date: { $lt: today } });
+        const totalBookings = await Booking.countDocuments();
+        
+        // New User Stats
+        const activeUsers = await User.countDocuments({ role: 'user', status: 'active' });
+        const deactiveUsers = await User.countDocuments({ role: 'user', status: 'deactive' });
+
+        res.json({
+            activeEvents,
+            pastEvents,
+            totalBookings,
+            activeUsers,
+            deactiveUsers
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

@@ -1,19 +1,25 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { 
     StyleSheet, Text, View, TouchableOpacity, StatusBar, SafeAreaView, 
-    ScrollView, TextInput, Image, Alert, Modal, ActivityIndicator 
+    ScrollView, TextInput, Alert, ActivityIndicator, Platform 
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import axiosInstance from '../api/axios';
+
+// Components
+import BottomNav from '../components/BottomNav';
+import EventCard from '../components/EventCard';
+import EventModal from '../components/EventModal';
+import StatusModal from '../components/StatusModal';
 
 const AdminPortal = ({ navigation }) => {
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [events, setEvents] = useState([]);
     const [search, setSearch] = useState('');
+    const [userSearch, setUserSearch] = useState('');
     const [eventType, setEventType] = useState('active'); // 'active' or 'old'
     const [loading, setLoading] = useState(false);
     
@@ -21,12 +27,20 @@ const AdminPortal = ({ navigation }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalLoading, setModalLoading] = useState(false);
     const [editingEvent, setEditingEvent] = useState(null);
+    const [stats, setStats] = useState({ activeEvents: 0, pastEvents: 0, totalBookings: 0 });
+    const [users, setUsers] = useState([]);
+    const [usersLoading, setUsersLoading] = useState(false);
+    const [bookings, setBookings] = useState([]);
+    const [bookingsLoading, setBookingsLoading] = useState(false);
+    const [bookingSearch, setBookingSearch] = useState('');
+    const [statusModal, setStatusModal] = useState({ visible: false, type: '', title: '', message: '', onConfirm: null });
 
     // Form States
     const [title, setTitle] = useState('');
     const [location, setLocation] = useState('');
     const [description, setDescription] = useState('');
-    const [date, setDate] = useState(new Date(Date.now() + 86400000));
+    const [date, setDate] = useState(new Date());
+    const [time, setTime] = useState('18:00');
     const [image, setImage] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [tickets, setTickets] = useState([{ type: 'Standard', price: '', quantity: '' }]);
@@ -43,6 +57,63 @@ const AdminPortal = ({ navigation }) => {
         }
     }, [search, eventType]);
 
+    const fetchStats = useCallback(async () => {
+        try {
+            const response = await axiosInstance.get('/events/stats');
+            setStats(response.data);
+        } catch (error) {
+            console.error('Stats fetch failed:', error);
+        }
+    }, []);
+
+    const fetchUsers = useCallback(async () => {
+        setUsersLoading(true);
+        try {
+            const response = await axiosInstance.get('/auth/users');
+            setUsers(response.data);
+        } catch (error) {
+            console.error('Users fetch failed:', error);
+        } finally {
+            setUsersLoading(false);
+        }
+    }, []);
+
+    const fetchAllBookings = useCallback(async () => {
+        setBookingsLoading(true);
+        try {
+            const response = await axiosInstance.get(`/bookings?search=${bookingSearch}`);
+            setBookings(response.data);
+        } catch (error) {
+            console.error('Bookings fetch failed:', error);
+        } finally {
+            setBookingsLoading(false);
+        }
+    }, [bookingSearch]);
+
+    const updateBookingStatus = async (bookingId, currentStatus) => {
+        const nextStatus = currentStatus === 'confirmed' ? 'hand over' : 'confirmed';
+        try {
+            const response = await axiosInstance.put(`/bookings/${bookingId}/status`, { status: nextStatus });
+            if (response.data.success) {
+                setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, status: nextStatus } : b));
+            }
+        } catch (error) {
+            setStatusModal({ visible: true, type: 'error', title: 'Update Failed', message: 'Failed to update booking status.' });
+        }
+    };
+
+    const toggleUserStatus = async (userId) => {
+        try {
+            const response = await axiosInstance.put(`/auth/users/${userId}/toggle`);
+            if (response.data.success) {
+                setUsers(prevUsers => prevUsers.map(u => u._id === userId ? { ...u, status: response.data.status } : u));
+                setStatusModal({ visible: true, type: 'success', title: 'Status Updated', message: `User status changed to ${response.data.status}` });
+            }
+        } catch (error) {
+            setStatusModal({ visible: true, type: 'error', title: 'Toggle Failed', message: error.response?.data?.error || 'Failed to update user status.' });
+        }
+    };
+
     useEffect(() => {
         const getUser = async () => {
             const userData = await AsyncStorage.getItem('user');
@@ -55,17 +126,25 @@ const AdminPortal = ({ navigation }) => {
         if (activeTab === 'Events') {
             fetchEvents();
         }
-    }, [activeTab, fetchEvents]);
+        if (activeTab === 'Dashboard') {
+            fetchStats();
+        }
+        if (activeTab === 'Users') {
+            fetchUsers();
+        }
+        if (activeTab === 'Bookings') {
+            fetchAllBookings();
+        }
+    }, [activeTab, fetchEvents, fetchStats, fetchUsers, fetchAllBookings]);
 
     const handleLogout = async () => {
-        await AsyncStorage.removeItem('token');
-        await AsyncStorage.removeItem('user');
-        navigation.replace('Landing');
+        await AsyncStorage.clear();
+        navigation.replace('Login');
     };
 
     const pickImage = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: 'images',
             allowsEditing: true,
             aspect: [16, 9],
             quality: 0.8,
@@ -76,32 +155,70 @@ const AdminPortal = ({ navigation }) => {
         }
     };
 
-    const addTicketRow = () => {
-        setTickets([...tickets, { type: '', price: '', quantity: '' }]);
+    const resetForm = () => {
+        setTitle('');
+        setLocation('');
+        setDescription('');
+        setDate(new Date());
+        setTime('18:00');
+        setImage(null);
+        setTickets([{ type: 'Standard', price: '', quantity: '' }]);
+        setEditingEvent(null);
     };
 
-    const removeTicketRow = (index) => {
-        setTickets(tickets.filter((_, i) => i !== index));
-    };
-
-    const updateTicketRow = (index, field, value) => {
-        const newTickets = [...tickets];
-        newTickets[index][field] = value;
-        setTickets(newTickets);
+    const openEditModal = (event) => {
+        setEditingEvent(event);
+        setTitle(event.title);
+        setLocation(event.location);
+        setDescription(event.description);
+        setDate(new Date(event.date));
+        if (event.time) setTime(event.time);
+        setImage(event.image ? `${axiosInstance.defaults.baseURL.replace('/api', '')}${event.image}` : null);
+        setTickets(event.tickets.map(({ type, price, quantity }) => ({ 
+            type, 
+            price: price.toString(), 
+            quantity: quantity.toString() 
+        })));
+        setIsModalOpen(true);
     };
 
     const handleSubmit = async () => {
         if (!title || !location || !description || tickets.some(t => !t.type || !t.price || !t.quantity)) {
-            Alert.alert('Error', 'Please fill all fields correctly');
+            setStatusModal({ visible: true, type: 'error', title: 'Incomplete Form', message: 'Please fill all required fields before saving.' });
             return;
         }
 
         setModalLoading(true);
         const formData = new FormData();
+        
+        // Handle manual date entry
+        let finalDate = date;
+        if (typeof date === 'string') {
+            const parsed = new Date(date);
+            if (isNaN(parsed.getTime())) {
+                setStatusModal({ visible: true, type: 'error', title: 'Invalid Date', message: 'Please enter a valid date (YYYY-MM-DD).' });
+                setModalLoading(false);
+                return;
+            }
+            finalDate = parsed;
+        }
+
+        // Validate date is tomorrow or later
+        const tomorrow = new Date();
+        tomorrow.setHours(0, 0, 0, 0);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        if (finalDate < tomorrow) {
+            setStatusModal({ visible: true, type: 'error', title: 'Invalid Date', message: 'Please select a date for tomorrow or later.' });
+            setModalLoading(false);
+            return;
+        }
+
         formData.append('title', title);
+        formData.append('date', finalDate.toISOString());
+        formData.append('time', time);
         formData.append('location', location);
         formData.append('description', description);
-        formData.append('date', date.toISOString());
         formData.append('tickets', JSON.stringify(tickets));
 
         if (image && !image.startsWith('http')) {
@@ -124,183 +241,164 @@ const AdminPortal = ({ navigation }) => {
         try {
             if (editingEvent) {
                 await axiosInstance.put(`/events/${editingEvent._id}`, formData);
-                Alert.alert('Success', 'Event updated successfully');
+                setStatusModal({ visible: true, type: 'success', title: 'Event Updated', message: 'Changes have been saved successfully.' });
             } else {
                 await axiosInstance.post('/events', formData);
-                Alert.alert('Success', 'Event created successfully');
+                setStatusModal({ visible: true, type: 'success', title: 'Event Created', message: 'Your new event is now live!' });
             }
             setIsModalOpen(false);
             resetForm();
             fetchEvents();
         } catch (error) {
-            console.error(error.response?.data);
-            Alert.alert('Error', error.response?.data?.error || 'Something went wrong');
+            setStatusModal({ visible: true, type: 'error', title: 'Submission Failed', message: error.response?.data?.error || 'Something went wrong.' });
         } finally {
             setModalLoading(false);
         }
     };
 
-    const handleDelete = (id) => {
-        Alert.alert('Delete Event', 'Are you sure you want to delete this event?', [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-                text: 'Delete', 
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await axiosInstance.delete(`/events/${id}`);
-                        fetchEvents();
-                    } catch (error) {
-                        Alert.alert('Error', error.response?.data?.error || 'Failed to delete');
-                    }
-                }
+    const handleDelete = async (id) => {
+        const performDelete = async () => {
+            try {
+                await axiosInstance.delete(`/events/${id}`);
+                setStatusModal({ visible: false });
+                fetchEvents();
+            } catch (error) {
+                setStatusModal({ visible: true, type: 'error', title: 'Delete Failed', message: error.response?.data?.error || 'Failed to delete event.' });
             }
-        ]);
-    };
+        };
 
-    const resetForm = () => {
-        setTitle('');
-        setLocation('');
-        setDescription('');
-        setDate(new Date(Date.now() + 86400000));
-        setImage(null);
-        setTickets([{ type: 'Standard', price: '', quantity: '' }]);
-        setEditingEvent(null);
+        setStatusModal({
+            visible: true,
+            type: 'confirm',
+            title: 'Delete Event',
+            message: 'Are you sure you want to permanently delete this event?',
+            onConfirm: performDelete
+        });
     };
-
-    const openEditModal = (event) => {
-        setEditingEvent(event);
-        setTitle(event.title);
-        setLocation(event.location);
-        setDescription(event.description);
-        setDate(new Date(event.date));
-        setImage(event.image ? `${axiosInstance.defaults.baseURL.replace('/api', '')}${event.image}` : null);
-        setTickets(event.tickets.map(({ type, price, quantity }) => ({ type, price: price.toString(), quantity: quantity.toString() })));
-        setIsModalOpen(true);
-    };
-
-    const NavItem = ({ name, icon }) => (
-        <TouchableOpacity 
-            style={styles.navItem} 
-            onPress={() => setActiveTab(name)}
-        >
-            <Ionicons 
-                name={icon} 
-                size={22} 
-                color={activeTab === name ? '#FFD301' : '#666'} 
-            />
-            <Text style={[styles.navText, { color: activeTab === name ? '#FFD301' : '#666' }]}>
-                {name}
-            </Text>
-        </TouchableOpacity>
-    );
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
-            
-            {activeTab === 'Dashboard' ? (
-                <ScrollView contentContainerStyle={styles.scrollContent}>
-                    <View style={styles.header}>
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>ADMIN PANEL</Text>
-                        </View>
-                        <Text style={styles.name}>Welcome, {user?.name.split(' ')[0] || 'Admin'}</Text>
+            <View style={styles.header}>
+                <View>
+                    <Text style={styles.welcomeText}>Hello,</Text>
+                    <Text style={styles.adminName}>{user?.name || 'Admin'}</Text>
+                </View>
+                <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={20} color="#FFD301" />
+                </TouchableOpacity>
+            </View>
+
+            {activeTab === 'Dashboard' && (
+                <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                    <View style={styles.dashboardHero}>
+                        <Text style={styles.sectionTitle}>Dashboard Overview</Text>
+                        <Text style={styles.dashboardSubtitle}>Track your event performance and user growth</Text>
                     </View>
 
-                    <View style={styles.statsContainer}>
-                        <View style={styles.statBox}>
-                            <Text style={styles.statValue}>12</Text>
-                            <Text style={styles.statLabel}>Events</Text>
-                        </View>
-                        <View style={styles.statBox}>
-                            <Text style={styles.statValue}>154</Text>
-                            <Text style={styles.statLabel}>Tickets</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.actionContainer}>
-                        <TouchableOpacity style={styles.actionButton} onPress={() => { setActiveTab('Events'); setIsModalOpen(true); }}>
-                            <View style={styles.actionContent}>
-                                <Ionicons name="add-circle-outline" size={24} color="#FFD301" />
-                                <Text style={styles.actionButtonText}>Create New Event</Text>
+                    {/* Featured Stat Card */}
+                    <View style={styles.featuredCard}>
+                        <View style={styles.featuredInfo}>
+                            <Text style={styles.featuredLabel}>Total Bookings</Text>
+                            <Text style={styles.featuredValue}>{stats.totalBookings}</Text>
+                            <View style={styles.trendBadge}>
+                                <Ionicons name="trending-up" size={14} color="#4CAF50" />
+                                <Text style={styles.trendText}>+12% from last month</Text>
                             </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionButton}>
-                            <View style={styles.actionContent}>
-                                <Ionicons name="clipboard-outline" size={24} color="#FFD301" />
-                                <Text style={styles.actionButtonText}>Manage Reservations</Text>
-                            </View>
-                        </TouchableOpacity>
+                        </View>
+                        <View style={styles.featuredIconContainer}>
+                            <Ionicons name="stats-chart" size={40} color="#FFD301" />
+                        </View>
                     </View>
 
-                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                        <Text style={styles.logoutText}>System Logout</Text>
-                    </TouchableOpacity>
+                    {/* Stats Grid */}
+                    <View style={styles.modernStatsGrid}>
+                        <View style={[styles.modernStatCard, { borderColor: '#4CAF5033' }]}>
+                            <View style={[styles.statIconCircle, { backgroundColor: '#4CAF5015' }]}>
+                                <Ionicons name="calendar" size={20} color="#4CAF50" />
+                            </View>
+                            <Text style={styles.modernStatValue}>{stats.activeEvents}</Text>
+                            <Text style={styles.modernStatLabel}>Active Events</Text>
+                        </View>
+
+                        <View style={[styles.modernStatCard, { borderColor: '#FF980033' }]}>
+                            <View style={[styles.statIconCircle, { backgroundColor: '#FF980015' }]}>
+                                <Ionicons name="time" size={20} color="#FF9800" />
+                            </View>
+                            <Text style={styles.modernStatValue}>{stats.pastEvents}</Text>
+                            <Text style={styles.modernStatLabel}>Past Events</Text>
+                        </View>
+
+                        <View style={[styles.modernStatCard, { borderColor: '#2196F333' }]}>
+                            <View style={[styles.statIconCircle, { backgroundColor: '#2196F315' }]}>
+                                <Ionicons name="people" size={20} color="#2196F3" />
+                            </View>
+                            <Text style={styles.modernStatValue}>{stats.activeUsers || 0}</Text>
+                            <Text style={styles.modernStatLabel}>Active Users</Text>
+                        </View>
+
+                        <View style={[styles.modernStatCard, { borderColor: '#F4433633' }]}>
+                            <View style={[styles.statIconCircle, { backgroundColor: '#F4433615' }]}>
+                                <Ionicons name="person-remove" size={20} color="#F44336" />
+                            </View>
+                            <Text style={styles.modernStatValue}>{stats.deactiveUsers || 0}</Text>
+                            <Text style={styles.modernStatLabel}>Deactive Users</Text>
+                        </View>
+                    </View>
+
+                    {/* Quick Actions or Recent section */}
+                    <View style={styles.recentSection}>
+                        <Text style={styles.subSectionTitle}>Recent Analytics</Text>
+                        <View style={styles.activityCard}>
+                            <Ionicons name="notifications-outline" size={24} color="#888" />
+                            <Text style={styles.activityText}>System is running optimally. All services active.</Text>
+                        </View>
+                    </View>
                 </ScrollView>
-            ) : activeTab === 'Events' ? (
-                <View style={styles.eventContainer}>
-                    <View style={styles.eventHeader}>
-                        <Text style={styles.eventTitle}>Manage Events</Text>
-                        <View style={styles.searchBar}>
-                            <Ionicons name="search" size={20} color="#666" />
-                            <TextInput 
-                                style={styles.searchInput}
-                                placeholder="Search event title..."
-                                placeholderTextColor="#666"
-                                value={search}
-                                onChangeText={setSearch}
-                            />
-                        </View>
-                        <View style={styles.filterRow}>
-                            <TouchableOpacity 
-                                style={[styles.filterBtn, eventType === 'active' && styles.filterBtnActive]}
-                                onPress={() => setEventType('active')}
-                            >
-                                <Text style={[styles.filterBtnText, eventType === 'active' && styles.filterBtnTextActive]}>Active Events</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.filterBtn, eventType === 'old' && styles.filterBtnActive]}
-                                onPress={() => setEventType('old')}
-                            >
-                                <Text style={[styles.filterBtnText, eventType === 'old' && styles.filterBtnTextActive]}>Old Events</Text>
-                            </TouchableOpacity>
-                        </View>
+            )}
+
+            {activeTab === 'Events' && (
+                <View style={styles.content}>
+                    <View style={styles.searchBar}>
+                        <Ionicons name="search" size={20} color="#666" />
+                        <TextInput 
+                            style={styles.searchInput} 
+                            placeholder="Search events..." 
+                            placeholderTextColor="#666"
+                            value={search}
+                            onChangeText={setSearch}
+                            onSubmitEditing={fetchEvents}
+                        />
+                    </View>
+
+                    <View style={styles.filterTabs}>
+                        <TouchableOpacity 
+                            style={[styles.filterTab, eventType === 'active' && styles.filterTabActive]}
+                            onPress={() => setEventType('active')}
+                        >
+                            <Text style={[styles.filterTabText, eventType === 'active' && styles.filterTabTextActive]}>Active</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={[styles.filterTab, eventType === 'old' && styles.filterTabActive]}
+                            onPress={() => setEventType('old')}
+                        >
+                            <Text style={[styles.filterTabText, eventType === 'old' && styles.filterTabTextActive]}>Past Events</Text>
+                        </TouchableOpacity>
                     </View>
 
                     {loading ? (
-                        <ActivityIndicator color="#FFD301" size="large" style={{ marginTop: 50 }} />
+                        <ActivityIndicator color="#FFD301" style={{ marginTop: 50 }} />
                     ) : (
-                        <ScrollView contentContainerStyle={styles.eventList}>
+                        <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
                             {events.map((event) => (
-                                <View key={event._id} style={styles.eventCard}>
-                                    <View style={styles.eventCardContent}>
-                                        <Text style={styles.eventCardTitle}>{event.title}</Text>
-                                        <Text style={styles.eventCardDate}>
-                                            <Ionicons name="calendar-outline" size={14} /> {new Date(event.date).toLocaleDateString()}
-                                        </Text>
-                                        <Text style={styles.eventCardLocation}>
-                                            <Ionicons name="location-outline" size={14} /> {event.location}
-                                        </Text>
-                                    </View>
-                                    <View style={styles.eventActions}>
-                                        {eventType === 'active' && (
-                                            <>
-                                                <TouchableOpacity onPress={() => openEditModal(event)} style={styles.iconBtn}>
-                                                    <Ionicons name="create-outline" size={22} color="#FFD301" />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity onPress={() => handleDelete(event._id)} style={styles.iconBtn}>
-                                                    <Ionicons name="trash-outline" size={22} color="#f44336" />
-                                                </TouchableOpacity>
-                                            </>
-                                        )}
-                                        {eventType === 'old' && (
-                                            <TouchableOpacity style={styles.iconBtn}>
-                                                <Ionicons name="eye-outline" size={22} color="#A0A0A0" />
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
+                                <EventCard 
+                                    key={event._id}
+                                    event={event}
+                                    eventType={eventType}
+                                    onEdit={openEditModal}
+                                    onDelete={handleDelete}
+                                    onView={(e) => Alert.alert('View Only', 'Viewing past event: ' + e.title)}
+                                />
                             ))}
                         </ScrollView>
                     )}
@@ -309,218 +407,339 @@ const AdminPortal = ({ navigation }) => {
                         <Ionicons name="add" size={32} color="#000" />
                     </TouchableOpacity>
                 </View>
-            ) : (
+            )}
+
+            {activeTab === 'Bookings' && (
+                <View style={styles.content}>
+                    <Text style={styles.sectionTitle}>Booking Management</Text>
+                    <View style={styles.searchBar}>
+                        <Ionicons name="search-outline" size={20} color="#666" />
+                        <TextInput 
+                            style={styles.searchInput} 
+                            placeholder="Find by ID, Event or User Email..." 
+                            placeholderTextColor="#666"
+                            value={bookingSearch}
+                            onChangeText={setBookingSearch}
+                        />
+                    </View>
+
+                    {bookingsLoading ? (
+                        <ActivityIndicator color="#FFD301" size="large" />
+                    ) : (
+                        <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
+                            {bookings.map(booking => (
+                                <View key={booking._id} style={styles.bookingManageCard}>
+                                    <View style={styles.bookingManageHeader}>
+                                        <View>
+                                            <Text style={styles.bookingManageId}>{booking.bookingId}</Text>
+                                            <Text style={styles.bookingManageUser}>{booking.user?.name} ({booking.user?.email})</Text>
+                                        </View>
+                                        <View style={[styles.statusBadge, { backgroundColor: booking.status === 'confirmed' ? '#4CAF5022' : '#FF980022' }]}>
+                                            <Text style={[styles.statusText, { color: booking.status === 'confirmed' ? '#4CAF50' : '#FF9800' }]}>
+                                                {booking.status.toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.bookingManageEvent}>{booking.event?.title}</Text>
+                                    
+                                    <View style={styles.bookingManageFooter}>
+                                        <Text style={styles.bookingManagePrice}>Rs. {booking.totalPrice}</Text>
+                                        <TouchableOpacity 
+                                            style={[styles.statusBtn, booking.status === 'confirmed' ? styles.activateBtn : styles.deactivateBtn]}
+                                            onPress={() => updateBookingStatus(booking._id, booking.status)}
+                                        >
+                                            <Text style={[styles.statusBtnText, booking.status === 'confirmed' ? styles.activateText : styles.deactivateText]}>
+                                                {booking.status === 'confirmed' ? 'Mark Hand Over' : 'Mark Confirmed'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    )}
+                </View>
+            )}
+
+            {activeTab === 'Users' && (
+                <View style={styles.content}>
+                    <View style={styles.dashboardHero}>
+                        <Text style={styles.sectionTitle}>User Registry</Text>
+                        <Text style={styles.dashboardSubtitle}>Manage platform access and monitor user activity</Text>
+                    </View>
+                    
+                    <View style={styles.searchBar}>
+                        <Ionicons name="people-outline" size={20} color="#FFD301" />
+                        <TextInput 
+                            style={styles.searchInput} 
+                            placeholder="Search by name or email address..." 
+                            placeholderTextColor="#666"
+                            value={userSearch}
+                            onChangeText={setUserSearch}
+                        />
+                    </View>
+
+                    {usersLoading ? (
+                        <ActivityIndicator color="#FFD301" size="large" />
+                    ) : (
+                        <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
+                            {users
+                                .filter(u => 
+                                    u.email.toLowerCase().includes(userSearch.toLowerCase()) || 
+                                    u.name.toLowerCase().includes(userSearch.toLowerCase())
+                                )
+                                .map(user => (
+                                <View key={user._id} style={styles.modernUserCard}>
+                                    <View style={styles.userCardMain}>
+                                        <View style={styles.userAvatarContainer}>
+                                            <View style={[styles.modernAvatar, { backgroundColor: user.status === 'active' ? '#FFD301' : '#333' }]}>
+                                                <Text style={[styles.avatarText, { color: user.status === 'active' ? '#000' : '#888' }]}>
+                                                    {user.name.charAt(0).toUpperCase()}
+                                                </Text>
+                                            </View>
+                                            <View style={[styles.statusIndicator, { backgroundColor: user.status === 'active' ? '#4CAF50' : '#F44336' }]} />
+                                        </View>
+                                        
+                                        <View style={styles.userMeta}>
+                                            <Text style={styles.modernUserName}>{user.name}</Text>
+                                            <Text style={styles.modernUserEmail}>{user.email}</Text>
+                                            <View style={styles.roleBadge}>
+                                                <Text style={styles.roleText}>{user.role.toUpperCase()}</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.userCardActions}>
+                                        <View style={styles.statusInfo}>
+                                            <Text style={styles.statusLabel}>Account Status</Text>
+                                            <Text style={[styles.statusValue, { color: user.status === 'active' ? '#4CAF50' : '#F44336' }]}>
+                                                {user.status.toUpperCase()}
+                                            </Text>
+                                        </View>
+                                        
+                                        <TouchableOpacity 
+                                            style={[styles.modernStatusBtn, user.status === 'active' ? styles.modernDeactivate : styles.modernActivate]}
+                                            onPress={() => toggleUserStatus(user._id)}
+                                        >
+                                            <Ionicons 
+                                                name={user.status === 'active' ? 'person-remove-outline' : 'person-add-outline'} 
+                                                size={18} 
+                                                color={user.status === 'active' ? '#F44336' : '#4CAF50'} 
+                                            />
+                                            <Text style={[styles.modernBtnText, { color: user.status === 'active' ? '#F44336' : '#4CAF50' }]}>
+                                                {user.status === 'active' ? 'Deactivate' : 'Activate'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                            {users.length === 0 && (
+                                <View style={styles.emptyContainer}>
+                                    <Ionicons name="people-outline" size={48} color="#222" />
+                                    <Text style={styles.emptyText}>No users found in the registry.</Text>
+                                </View>
+                            )}
+                        </ScrollView>
+                    )}
+                </View>
+            )}
+
+            {!['Dashboard', 'Events', 'Users', 'Bookings'].includes(activeTab) && (
                 <View style={styles.placeholderContent}>
                     <Ionicons name="construct-outline" size={60} color="#333" />
                     <Text style={styles.placeholderText}>{activeTab} Module Coming Soon</Text>
                 </View>
             )}
 
-            {/* Event Form Modal */}
-            <Modal visible={isModalOpen} animationType="slide">
-                <SafeAreaView style={styles.modalContainer}>
-                    <View style={styles.modalHeader}>
-                        <TouchableOpacity onPress={() => setIsModalOpen(false)}>
-                            <Ionicons name="close" size={28} color="#FFF" />
-                        </TouchableOpacity>
-                        <Text style={styles.modalTitle}>{editingEvent ? 'Edit Event' : 'New Event'}</Text>
-                        <TouchableOpacity onPress={handleSubmit} disabled={modalLoading}>
-                            {modalLoading ? <ActivityIndicator color="#FFD301" /> : <Text style={styles.saveBtn}>Save</Text>}
-                        </TouchableOpacity>
-                    </View>
+            <EventModal 
+                visible={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                loading={modalLoading}
+                editingEvent={editingEvent}
+                handleSubmit={handleSubmit}
+                title={title} setTitle={setTitle}
+                location={location} setLocation={setLocation}
+                description={description} setDescription={setDescription}
+                date={date} setDate={setDate}
+                time={time} setTime={setTime}
+                image={image} pickImage={pickImage}
+                tickets={tickets}
+                addTicketRow={() => setTickets([...tickets, { type: '', price: '', quantity: '' }])}
+                removeTicketRow={(i) => setTickets(tickets.filter((_, idx) => idx !== i))}
+                updateTicketRow={(i, f, v) => {
+                    const t = [...tickets];
+                    t[i][f] = v;
+                    setTickets(t);
+                }}
+                showDatePicker={showDatePicker}
+                setShowDatePicker={setShowDatePicker}
+            />
 
-                    <ScrollView style={styles.modalForm}>
-                        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-                            {image ? (
-                                <Image source={{ uri: image }} style={styles.previewImage} />
-                            ) : (
-                                <View style={styles.imagePlaceholder}>
-                                    <Ionicons name="image-outline" size={40} color="#666" />
-                                    <Text style={styles.imagePlaceholderText}>Upload Event Banner</Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
+            <StatusModal 
+                visible={statusModal.visible}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                onConfirm={statusModal.onConfirm}
+                onClose={() => setStatusModal({ ...statusModal, visible: false })}
+            />
 
-                        <Text style={styles.modalLabel}>Event Title</Text>
-                        <TextInput style={styles.modalInput} value={title} onChangeText={setTitle} placeholder="Concert, Festival, etc." placeholderTextColor="#444" />
-
-                        <Text style={styles.modalLabel}>Date</Text>
-                        {Platform.OS === 'web' ? (
-                            <input 
-                                type="date" 
-                                value={date.toISOString().split('T')[0]} 
-                                onChange={(e) => setDate(new Date(e.target.value))}
-                                style={{
-                                    backgroundColor: '#1A1A1A',
-                                    borderRadius: '12px',
-                                    padding: '15px',
-                                    color: '#FFF',
-                                    marginBottom: '20px',
-                                    border: '1px solid #333',
-                                    width: '100%',
-                                    outline: 'none',
-                                    fontFamily: 'inherit'
-                                }}
-                                min="1900-01-01"
-                            />
-                        ) : (
-                            <>
-                                <TouchableOpacity style={styles.modalInput} onPress={() => setShowDatePicker(true)}>
-                                    <Text style={{ color: '#FFF' }}>{date.toLocaleDateString()}</Text>
-                                </TouchableOpacity>
-                                {showDatePicker && (
-                                    <DateTimePicker
-                                        value={date}
-                                        mode="date"
-                                        onChange={(e, selectedDate) => {
-                                            setShowDatePicker(false);
-                                            if (selectedDate) setDate(selectedDate);
-                                        }}
-                                    />
-                                )}
-                            </>
-                        )}
-
-                        <Text style={styles.modalLabel}>Location</Text>
-                        <TextInput style={styles.modalInput} value={location} onChangeText={setLocation} placeholder="City Hall, Stadium, etc." placeholderTextColor="#444" />
-
-                        <Text style={styles.modalLabel}>Description</Text>
-                        <TextInput style={[styles.modalInput, { height: 100 }]} value={description} onChangeText={setDescription} multiline numberOfLines={4} placeholder="Describe your event..." placeholderTextColor="#444" />
-
-                        <View style={styles.ticketSection}>
-                            <View style={styles.ticketHeader}>
-                                <Text style={styles.modalLabel}>Ticket Pricing</Text>
-                                <TouchableOpacity onPress={addTicketRow}>
-                                    <Ionicons name="add-circle" size={24} color="#FFD301" />
-                                </TouchableOpacity>
-                            </View>
-                            {tickets.map((t, index) => (
-                                <View key={index} style={styles.ticketCard}>
-                                    <View style={styles.ticketTopRow}>
-                                        <TextInput 
-                                            style={[styles.modalInput, styles.ticketNameInput]} 
-                                            value={t.type} 
-                                            onChangeText={(v) => updateTicketRow(index, 'type', v)}
-                                            placeholder="Ticket Name (e.g. VIP)"
-                                            placeholderTextColor="#444"
-                                        />
-                                        {tickets.length > 1 && (
-                                            <TouchableOpacity onPress={() => removeTicketRow(index)} style={styles.removeBtn}>
-                                                <Ionicons name="close-circle" size={24} color="#f44336" />
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                    <View style={styles.ticketBottomRow}>
-                                        <View style={styles.priceContainer}>
-                                            <Text style={styles.inputPrefix}>$</Text>
-                                            <TextInput 
-                                                style={[styles.modalInput, styles.ticketSubInput]} 
-                                                value={t.price} 
-                                                onChangeText={(v) => updateTicketRow(index, 'price', v)}
-                                                placeholder="Price"
-                                                placeholderTextColor="#444"
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                        <View style={styles.qtyContainer}>
-                                            <Text style={styles.inputPrefix}>Qty</Text>
-                                            <TextInput 
-                                                style={[styles.modalInput, styles.ticketSubInput]} 
-                                                value={t.quantity} 
-                                                onChangeText={(v) => updateTicketRow(index, 'quantity', v)}
-                                                placeholder="Quantity"
-                                                placeholderTextColor="#444"
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                    </View>
-                                </View>
-                            ))}
-                        </View>
-                        <View style={{ height: 50 }} />
-                    </ScrollView>
-                </SafeAreaView>
-            </Modal>
-
-            {/* Bottom Navigation Bar */}
-            <View style={styles.bottomNav}>
-                <NavItem name="Dashboard" icon="grid-outline" />
-                <NavItem name="Events" icon="calendar-outline" />
-                <NavItem name="Bookings" icon="ticket-outline" />
-                <NavItem name="Users" icon="people-outline" />
-            </View>
+            <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#000000' },
-    scrollContent: { padding: 25, paddingBottom: 100 },
-    header: { marginTop: 20, marginBottom: 40 },
-    badge: { backgroundColor: '#FFD301', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 5, marginBottom: 10 },
-    badgeText: { color: '#000', fontSize: 12, fontWeight: 'bold' },
-    name: { fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' },
-    statsContainer: { flexDirection: 'row', gap: 15, marginBottom: 30 },
-    statBox: { flex: 1, backgroundColor: '#1A1A1A', padding: 20, borderRadius: 15, borderWidth: 1, borderColor: '#333', alignItems: 'center' },
-    statValue: { fontSize: 24, fontWeight: 'bold', color: '#FFD301', marginBottom: 5 },
-    statLabel: { fontSize: 14, color: '#A0A0A0' },
-    actionContainer: { gap: 15, marginBottom: 40 },
-    actionButton: { backgroundColor: '#1A1A1A', height: 70, borderRadius: 15, justifyContent: 'center', paddingHorizontal: 20, borderWidth: 1, borderColor: '#333' },
-    actionContent: { flexDirection: 'row', alignItems: 'center', gap: 15 },
-    actionButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-    logoutButton: { backgroundColor: '#1A1A1A', height: 60, borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#f4433633' },
-    logoutText: { color: '#f44336', fontSize: 16, fontWeight: 'bold' },
+    container: { flex: 1, backgroundColor: '#000' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 25, backgroundColor: '#000' },
+    welcomeText: { color: '#888', fontSize: 14 },
+    adminName: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+    logoutBtn: { padding: 10, backgroundColor: '#1A1A1A', borderRadius: 12 },
+    content: { flex: 1, paddingHorizontal: 25 },
+    sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
+    statsGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+    statCard: { minWidth: '30%', flex: 1, backgroundColor: '#111', padding: 15, borderRadius: 20, borderWidth: 1, borderColor: '#222', alignItems: 'center' },
+    statNumber: { color: '#FFD301', fontSize: 22, fontWeight: 'bold' },
+    statLabel: { color: '#888', fontSize: 10, marginTop: 5, textAlign: 'center' },
+    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 15, borderRadius: 15, height: 50, marginBottom: 20, borderWidth: 1, borderColor: '#222' },
+    searchInput: { flex: 1, marginLeft: 10, color: '#FFF' },
+    filterTabs: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+    filterTab: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, backgroundColor: '#111' },
+    filterTabActive: { backgroundColor: '#FFD301' },
+    filterTabText: { color: '#888', fontSize: 12, fontWeight: 'bold' },
+    filterTabTextActive: { color: '#000' },
+    eventList: { flex: 1, marginBottom: 90 },
+    fab: { 
+        position: 'absolute', 
+        bottom: 100, 
+        right: 0, 
+        width: 60, 
+        height: 60, 
+        backgroundColor: '#FFD301', 
+        borderRadius: 30, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        elevation: 5, 
+        boxShadow: '0px 4px 8px rgba(255, 211, 1, 0.3)' 
+    },
+    placeholderContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
+    placeholderText: { color: '#444', fontSize: 16, marginTop: 15 },
     
-    // Event Management Styles
-    eventContainer: { flex: 1, padding: 20, paddingBottom: 100 },
-    eventHeader: { marginBottom: 20 },
-    eventTitle: { color: '#FFF', fontSize: 28, fontWeight: 'bold', marginBottom: 20 },
-    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', height: 50, borderRadius: 12, paddingHorizontal: 15, marginBottom: 15 },
-    searchInput: { flex: 1, color: '#FFF', marginLeft: 10, fontSize: 14 },
-    filterRow: { flexDirection: 'row', gap: 10 },
-    filterBtn: { flex: 1, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1A1A1A' },
-    filterBtnActive: { backgroundColor: '#FFD301' },
-    filterBtnText: { color: '#666', fontWeight: 'bold' },
-    filterBtnTextActive: { color: '#000' },
-    eventList: { gap: 12 },
-    eventCard: { backgroundColor: '#1A1A1A', padding: 15, borderRadius: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
-    eventCardTitle: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-    eventCardDate: { color: '#A0A0A0', fontSize: 12, marginTop: 4 },
-    eventCardLocation: { color: '#666', fontSize: 12, marginTop: 2 },
-    eventActions: { flexDirection: 'row', gap: 10 },
-    iconBtn: { padding: 5 },
-    fab: { position: 'absolute', bottom: 100, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFD301', justifyContent: 'center', alignItems: 'center', elevation: 5 },
+    // Modern Dashboard Styles
+    dashboardHero: { marginBottom: 25 },
+    dashboardSubtitle: { color: '#666', fontSize: 13, marginTop: 5 },
+    featuredCard: { 
+        backgroundColor: '#111', 
+        borderRadius: 24, 
+        padding: 25, 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#FFD30122',
+        marginBottom: 20,
+        boxShadow: '0px 10px 20px rgba(255, 211, 1, 0.05)'
+    },
+    featuredInfo: { flex: 1 },
+    featuredLabel: { color: '#888', fontSize: 14, fontWeight: '600' },
+    featuredValue: { color: '#FFF', fontSize: 36, fontWeight: 'bold', marginVertical: 5 },
+    trendBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    trendText: { color: '#4CAF50', fontSize: 12, fontWeight: 'bold' },
+    featuredIconContainer: { width: 70, height: 70, borderRadius: 20, backgroundColor: '#FFD30110', justifyContent: 'center', alignItems: 'center' },
+    
+    modernStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 30 },
+    modernStatCard: { 
+        width: '48%', 
+        backgroundColor: '#111', 
+        borderRadius: 20, 
+        padding: 18, 
+        borderWidth: 1,
+        boxShadow: '0px 4px 10px rgba(0,0,0,0.3)'
+    },
+    statIconCircle: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+    modernStatValue: { color: '#FFF', fontSize: 24, fontWeight: 'bold' },
+    modernStatLabel: { color: '#666', fontSize: 12, marginTop: 4, fontWeight: '500' },
+    
+    recentSection: { marginBottom: 100 },
+    subSectionTitle: { color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 15 },
+    activityCard: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        gap: 15, 
+        backgroundColor: '#111', 
+        padding: 18, 
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: '#222'
+    },
+    activityText: { color: '#888', fontSize: 13, flex: 1 },
 
-    // Modal Styles
-    modalContainer: { flex: 1, backgroundColor: '#000' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#1A1A1A' },
-    modalTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-    saveBtn: { color: '#FFD301', fontSize: 16, fontWeight: 'bold' },
-    modalForm: { padding: 20 },
-    imagePicker: { width: '100%', height: 200, backgroundColor: '#1A1A1A', borderRadius: 15, overflow: 'hidden', marginBottom: 25, justifyContent: 'center', alignItems: 'center' },
-    previewImage: { width: '100%', height: '100%' },
-    imagePlaceholder: { alignItems: 'center' },
-    imagePlaceholderText: { color: '#666', marginTop: 10 },
-    modalLabel: { color: '#A0A0A0', fontSize: 12, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase' },
-    modalInput: { backgroundColor: '#1A1A1A', borderRadius: 12, padding: 15, color: '#FFF', marginBottom: 20, borderWidth: 1, borderColor: '#333', justifyContent: 'center' },
-    ticketSection: { marginTop: 10 },
-    ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    ticketCard: { backgroundColor: '#111', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#222' },
-    ticketTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-    ticketNameInput: { flex: 1, marginBottom: 0, height: 45 },
-    ticketBottomRow: { flexDirection: 'row', gap: 10 },
-    priceContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderRadius: 12, borderWidth: 1, borderColor: '#333', paddingLeft: 12 },
-    qtyContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderRadius: 12, borderWidth: 1, borderColor: '#333', paddingLeft: 12 },
-    inputPrefix: { color: '#FFD301', fontSize: 14, fontWeight: 'bold' },
-    ticketSubInput: { flex: 1, backgroundColor: 'transparent', borderWidth: 0, marginBottom: 0, height: 45, paddingLeft: 8 },
-    removeBtn: { padding: 5 },
+    // User Management Styles
+    userCard: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        backgroundColor: '#111', 
+        padding: 15, 
+        borderRadius: 18, 
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#222'
+    },
+    userStatusContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    statusDot: { width: 10, height: 10, borderRadius: 5 },
+    dotActive: { backgroundColor: '#4CAF50', boxShadow: '0 0 8px #4CAF50' },
+    dotInactive: { backgroundColor: '#F44336', boxShadow: '0 0 8px #F44336' },
 
-    // Bottom Nav Styles
-    bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, backgroundColor: '#0A0A0A', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#222', paddingBottom: 15 },
-    navItem: { alignItems: 'center', justifyContent: 'center' },
-    navText: { fontSize: 11, marginTop: 5, fontWeight: '500' },
-    placeholderContent: { flex: 1, height: 400, justifyContent: 'center', alignItems: 'center' },
-    placeholderText: { color: '#666', fontSize: 16, marginTop: 20, fontWeight: '500' }
+    // Booking Manage Card Styles
+    bookingManageCard: { backgroundColor: '#111', borderRadius: 20, padding: 20, marginBottom: 15, borderWidth: 1, borderColor: '#222' },
+    bookingManageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+    bookingManageId: { color: '#FFD301', fontSize: 16, fontWeight: 'bold' },
+    bookingManageUser: { color: '#666', fontSize: 12, marginTop: 2 },
+    userAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFD301', justifyContent: 'center', alignItems: 'center' },
+    avatarText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+    userName: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+    userEmail: { color: '#666', fontSize: 12 },
+    statusBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+    statusBtnText: { fontSize: 11, fontWeight: 'bold' },
+    deactivateBtn: { borderColor: '#f44336', backgroundColor: '#f4433615' },
+    activateBtn: { borderColor: '#4CAF50', backgroundColor: '#4CAF5015' },
+    deactivateText: { color: '#f44336' },
+    activateText: { color: '#4CAF50' },
+
+    // Modern User Card Styles
+    modernUserCard: { 
+        backgroundColor: '#111', 
+        borderRadius: 24, 
+        padding: 20, 
+        marginBottom: 16, 
+        borderWidth: 1, 
+        borderColor: '#222',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+    },
+    userCardMain: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 20 },
+    userAvatarContainer: { position: 'relative' },
+    modernAvatar: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    statusIndicator: { position: 'absolute', bottom: -2, right: -2, width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: '#111' },
+    userMeta: { flex: 1, gap: 2 },
+    modernUserName: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+    modernUserEmail: { color: '#666', fontSize: 13 },
+    roleBadge: { backgroundColor: '#1A1A1A', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4, borderWidth: 1, borderColor: '#333' },
+    roleText: { color: '#FFD301', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+    userCardActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 15, borderTopWidth: 1, borderTopColor: '#222' },
+    statusInfo: { gap: 2 },
+    statusLabel: { color: '#444', fontSize: 10, fontWeight: 'bold' },
+    statusValue: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
+    modernStatusBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+    modernDeactivate: { borderColor: '#F4433622', backgroundColor: '#F4433610' },
+    modernActivate: { borderColor: '#4CAF5022', backgroundColor: '#4CAF5010' },
+    modernBtnText: { fontSize: 13, fontWeight: 'bold' },
+    emptyContainer: { alignItems: 'center', marginTop: 100, gap: 15 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+    statusText: { fontSize: 10, fontWeight: 'bold' },
+    bookingManageEvent: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
+    bookingManageFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#222', paddingTop: 15 },
+    bookingManagePrice: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
 });
 
 export default AdminPortal;
