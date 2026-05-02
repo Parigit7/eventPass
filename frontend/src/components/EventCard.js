@@ -5,7 +5,7 @@ import axiosInstance from '../api/axios';
 
 const { width } = Dimensions.get('window');
 
-const EventCard = ({ event, eventType, onEdit, onDelete, onView }) => {
+const EventCard = ({ event, eventType, onEdit, onDelete, onView, isAdmin = true, onBook }) => {
     const imageUrl = event.image ? `${axiosInstance.defaults.baseURL.replace('/api', '')}${event.image}` : null;
 
     return (
@@ -35,21 +35,28 @@ const EventCard = ({ event, eventType, onEdit, onDelete, onView }) => {
                 </View>
 
                 <View style={styles.eventActions}>
-                    {eventType === 'active' ? (
-                        <>
-                            <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={() => onEdit(event)}>
-                                <Ionicons name="create-outline" size={18} color="#000" />
-                                <Text style={styles.btnText}>Edit</Text>
+                    {isAdmin ? (
+                        eventType === 'active' ? (
+                            <>
+                                <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={() => onEdit(event)}>
+                                    <Ionicons name="create-outline" size={18} color="#000" />
+                                    <Text style={styles.btnText}>Edit</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={() => onDelete(event._id)}>
+                                    <Ionicons name="trash-outline" size={18} color="#FFF" />
+                                    <Text style={[styles.btnText, { color: '#FFF' }]}>Delete</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <TouchableOpacity style={[styles.actionBtn, styles.viewBtn]} onPress={() => onView(event)}>
+                                <Ionicons name="eye-outline" size={18} color="#FFF" />
+                                <Text style={[styles.btnText, { color: '#FFF' }]}>View Details</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={() => onDelete(event._id)}>
-                                <Ionicons name="trash-outline" size={18} color="#FFF" />
-                                <Text style={[styles.btnText, { color: '#FFF' }]}>Delete</Text>
-                            </TouchableOpacity>
-                        </>
+                        )
                     ) : (
-                        <TouchableOpacity style={[styles.actionBtn, styles.viewBtn]} onPress={() => onView(event)}>
-                            <Ionicons name="eye-outline" size={18} color="#FFF" />
-                            <Text style={[styles.btnText, { color: '#FFF' }]}>View Details</Text>
+                        <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={() => onBook(event)}>
+                            <Ionicons name="ticket-outline" size={18} color="#000" />
+                            <Text style={styles.btnText}>Book Now</Text>
                         </TouchableOpacity>
                     )}
                 </View>

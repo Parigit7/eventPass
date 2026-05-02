@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, StatusBar, SafeAreaView, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, StatusBar, SafeAreaView, ScrollView, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import axiosInstance from '../api/axios';
+import EventCard from '../components/EventCard';
+import { ActivityIndicator, TextInput } from 'react-native';
 
 const UserPortal = ({ navigation }) => {
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState('Events');
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState('');
 
     useEffect(() => {
         const getUser = async () => {
@@ -14,6 +20,24 @@ const UserPortal = ({ navigation }) => {
         };
         getUser();
     }, []);
+
+    const fetchEvents = async () => {
+        setLoading(true);
+        try {
+            const response = await axiosInstance.get(`/events?search=${search}&type=active`);
+            setEvents(response.data);
+        } catch (error) {
+            console.error('Fetch events error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'Events') {
+            fetchEvents();
+        }
+    }, [activeTab]);
 
     const handleLogout = async () => {
         await AsyncStorage.removeItem('token');
@@ -58,10 +82,39 @@ const UserPortal = ({ navigation }) => {
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={styles.sectionTitle}>Popular Events</Text>
-                        <View style={[styles.card, { marginTop: 15, backgroundColor: '#0A0A0A' }]}>
-                            <Text style={styles.cardSubtitle}>No upcoming events found. Check back later!</Text>
+                        <Text style={styles.sectionTitle}>Upcoming Events</Text>
+                        
+                        <View style={styles.searchBar}>
+                            <Ionicons name="search" size={20} color="#666" />
+                            <TextInput 
+                                style={styles.searchInput} 
+                                placeholder="Search events..." 
+                                placeholderTextColor="#666"
+                                value={search}
+                                onChangeText={setSearch}
+                                onSubmitEditing={fetchEvents}
+                            />
                         </View>
+
+                        {loading ? (
+                            <ActivityIndicator color="#FFD301" size="large" style={{ marginTop: 30 }} />
+                        ) : (
+                            <View style={styles.eventGrid}>
+                                {events.map(event => (
+                                    <EventCard 
+                                        key={event._id}
+                                        event={event}
+                                        isAdmin={false}
+                                        onBook={(e) => Alert.alert('Booking', 'Booking flow coming soon for: ' + e.title)}
+                                    />
+                                ))}
+                                {events.length === 0 && (
+                                    <View style={[styles.card, { marginTop: 15, backgroundColor: '#0A0A0A' }]}>
+                                        <Text style={styles.cardSubtitle}>No upcoming events found. Check back later!</Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
                     </View>
                 )}
 
@@ -111,7 +164,10 @@ const styles = StyleSheet.create({
     greeting: { fontSize: 20, color: '#A0A0A0' },
     name: { fontSize: 36, fontWeight: 'bold', color: '#FFFFFF' },
     content: { flex: 1 },
-    sectionTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: 'bold', marginTop: 30 },
+    sectionTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: 'bold', marginTop: 30, marginBottom: 15 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 15, borderRadius: 15, height: 50, marginBottom: 20, borderWidth: 1, borderColor: '#222' },
+    searchInput: { flex: 1, marginLeft: 10, color: '#FFF' },
+    eventGrid: { marginTop: 10 },
     card: { 
         backgroundColor: '#1A1A1A', 
         padding: 25, 
