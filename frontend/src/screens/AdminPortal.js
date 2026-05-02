@@ -12,6 +12,7 @@ import axiosInstance from '../api/axios';
 import BottomNav from '../components/BottomNav';
 import EventCard from '../components/EventCard';
 import EventModal from '../components/EventModal';
+import StatusModal from '../components/StatusModal';
 
 const AdminPortal = ({ navigation }) => {
     const [user, setUser] = useState(null);
@@ -32,6 +33,7 @@ const AdminPortal = ({ navigation }) => {
     const [bookings, setBookings] = useState([]);
     const [bookingsLoading, setBookingsLoading] = useState(false);
     const [bookingSearch, setBookingSearch] = useState('');
+    const [statusModal, setStatusModal] = useState({ visible: false, type: '', title: '', message: '', onConfirm: null });
 
     // Form States
     const [title, setTitle] = useState('');
@@ -96,7 +98,7 @@ const AdminPortal = ({ navigation }) => {
                 setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, status: nextStatus } : b));
             }
         } catch (error) {
-            Alert.alert('Error', 'Failed to update status');
+            setStatusModal({ visible: true, type: 'error', title: 'Update Failed', message: 'Failed to update booking status.' });
         }
     };
 
@@ -105,11 +107,10 @@ const AdminPortal = ({ navigation }) => {
             const response = await axiosInstance.put(`/auth/users/${userId}/toggle`);
             if (response.data.success) {
                 setUsers(prevUsers => prevUsers.map(u => u._id === userId ? { ...u, status: response.data.status } : u));
-                Alert.alert('Success', `User status updated to ${response.data.status}`);
+                setStatusModal({ visible: true, type: 'success', title: 'Status Updated', message: `User status changed to ${response.data.status}` });
             }
         } catch (error) {
-            console.error('Toggle Status Error:', error.response?.data || error.message);
-            Alert.alert('Error', error.response?.data?.error || 'Failed to update user status');
+            setStatusModal({ visible: true, type: 'error', title: 'Toggle Failed', message: error.response?.data?.error || 'Failed to update user status.' });
         }
     };
 
@@ -183,7 +184,7 @@ const AdminPortal = ({ navigation }) => {
 
     const handleSubmit = async () => {
         if (!title || !location || !description || tickets.some(t => !t.type || !t.price || !t.quantity)) {
-            Alert.alert('Error', 'Please fill all fields correctly');
+            setStatusModal({ visible: true, type: 'error', title: 'Incomplete Form', message: 'Please fill all required fields before saving.' });
             return;
         }
 
@@ -195,7 +196,7 @@ const AdminPortal = ({ navigation }) => {
         if (typeof date === 'string') {
             const parsed = new Date(date);
             if (isNaN(parsed.getTime())) {
-                Alert.alert('Error', 'Please enter a valid date (YYYY-MM-DD)');
+                setStatusModal({ visible: true, type: 'error', title: 'Invalid Date', message: 'Please enter a valid date (YYYY-MM-DD).' });
                 setModalLoading(false);
                 return;
             }
@@ -208,7 +209,7 @@ const AdminPortal = ({ navigation }) => {
         tomorrow.setDate(tomorrow.getDate() + 1);
 
         if (finalDate < tomorrow) {
-            Alert.alert('Error', 'Please select a date for tomorrow or later');
+            setStatusModal({ visible: true, type: 'error', title: 'Invalid Date', message: 'Please select a date for tomorrow or later.' });
             setModalLoading(false);
             return;
         }
@@ -240,17 +241,16 @@ const AdminPortal = ({ navigation }) => {
         try {
             if (editingEvent) {
                 await axiosInstance.put(`/events/${editingEvent._id}`, formData);
-                Alert.alert('Success', 'Event updated successfully');
+                setStatusModal({ visible: true, type: 'success', title: 'Event Updated', message: 'Changes have been saved successfully.' });
             } else {
                 await axiosInstance.post('/events', formData);
-                Alert.alert('Success', 'Event created successfully');
+                setStatusModal({ visible: true, type: 'success', title: 'Event Created', message: 'Your new event is now live!' });
             }
             setIsModalOpen(false);
             resetForm();
             fetchEvents();
         } catch (error) {
-            console.error(error.response?.data);
-            Alert.alert('Error', error.response?.data?.error || 'Something went wrong');
+            setStatusModal({ visible: true, type: 'error', title: 'Submission Failed', message: error.response?.data?.error || 'Something went wrong.' });
         } finally {
             setModalLoading(false);
         }
@@ -260,23 +260,20 @@ const AdminPortal = ({ navigation }) => {
         const performDelete = async () => {
             try {
                 await axiosInstance.delete(`/events/${id}`);
+                setStatusModal({ visible: false });
                 fetchEvents();
             } catch (error) {
-                console.error('Delete error:', error.response?.data);
-                Alert.alert('Error', error.response?.data?.error || 'Failed to delete');
+                setStatusModal({ visible: true, type: 'error', title: 'Delete Failed', message: error.response?.data?.error || 'Failed to delete event.' });
             }
         };
 
-        if (Platform.OS === 'web') {
-            if (window.confirm('Are you sure you want to delete this event?')) {
-                performDelete();
-            }
-        } else {
-            Alert.alert('Delete Event', 'Are you sure you want to delete this event?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: performDelete }
-            ]);
-        }
+        setStatusModal({
+            visible: true,
+            type: 'confirm',
+            title: 'Delete Event',
+            message: 'Are you sure you want to permanently delete this event?',
+            onConfirm: performDelete
+        });
     };
 
     return (
@@ -576,6 +573,15 @@ const AdminPortal = ({ navigation }) => {
                 }}
                 showDatePicker={showDatePicker}
                 setShowDatePicker={setShowDatePicker}
+            />
+
+            <StatusModal 
+                visible={statusModal.visible}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                onConfirm={statusModal.onConfirm}
+                onClose={() => setStatusModal({ ...statusModal, visible: false })}
             />
 
             <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />

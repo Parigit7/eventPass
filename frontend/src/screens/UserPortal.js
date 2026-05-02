@@ -6,6 +6,7 @@ import axiosInstance from '../api/axios';
 import EventCard from '../components/EventCard';
 import BookingModal from '../components/BookingModal';
 import EventDetailsModal from '../components/EventDetailsModal';
+import StatusModal from '../components/StatusModal';
 
 const UserPortal = ({ navigation }) => {
     const [user, setUser] = useState(null);
@@ -18,6 +19,7 @@ const UserPortal = ({ navigation }) => {
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [statusModal, setStatusModal] = useState({ visible: false, type: '', title: '', message: '', onConfirm: null });
 
     useEffect(() => {
         const getUser = async () => {
@@ -56,9 +58,17 @@ const UserPortal = ({ navigation }) => {
         if (activeTab === 'My Tickets') fetchBookings();
     }, [activeTab, fetchEvents, fetchBookings]);
 
-    const handleLogout = async () => {
-        await AsyncStorage.clear();
-        navigation.replace('Landing');
+    const handleLogout = () => {
+        setStatusModal({
+            visible: true,
+            type: 'confirm',
+            title: 'Logout',
+            message: 'Are you sure you want to log out of your account?',
+            onConfirm: async () => {
+                await AsyncStorage.clear();
+                navigation.replace('Landing');
+            }
+        });
     };
 
     const NavItem = ({ name, icon }) => (
@@ -237,6 +247,15 @@ const UserPortal = ({ navigation }) => {
                     event={selectedEvent}
                 />
             )}
+
+            <StatusModal 
+                visible={statusModal.visible}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                onConfirm={statusModal.onConfirm}
+                onClose={() => setStatusModal({ ...statusModal, visible: false })}
+            />
         </SafeAreaView>
     );
 };

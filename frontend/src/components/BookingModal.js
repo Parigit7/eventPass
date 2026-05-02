@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Modal, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Text, Modal, TouchableOpacity, ScrollView, Image, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axiosInstance from '../api/axios';
+import StatusModal from './StatusModal';
 
 const BookingModal = ({ visible, onClose, event, onBookingComplete, readOnly = false }) => {
     const [selectedTickets, setSelectedTickets] = useState({});
     const [loading, setLoading] = useState(false);
+    const [statusModal, setStatusModal] = useState({ visible: false, type: '', title: '', message: '', onConfirm: null });
 
     if (!event) return null;
 
@@ -29,27 +31,26 @@ const BookingModal = ({ visible, onClose, event, onBookingComplete, readOnly = f
         if (readOnly) return;
         const total = calculateTotal();
         if (total === 0) {
-            Alert.alert('Error', 'Please select at least one ticket');
+            setStatusModal({
+                visible: true,
+                type: 'error',
+                title: 'No Tickets',
+                message: 'Please select at least one ticket to continue.'
+            });
             return;
         }
 
-        if (Platform.OS === 'web') {
-            if (window.confirm(`Are you sure you want to book these tickets for a total of Rs. ${total}?`)) {
-                processBooking();
-            }
-        } else {
-            Alert.alert(
-                'Confirm Booking',
-                `Are you sure you want to book these tickets for a total of Rs. ${total}?`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Confirm', onPress: processBooking }
-                ]
-            );
-        }
+        setStatusModal({
+            visible: true,
+            type: 'confirm',
+            title: 'Confirm Booking',
+            message: `Are you sure you want to book these tickets for a total of Rs. ${total}?`,
+            onConfirm: processBooking
+        });
     };
 
     const processBooking = async () => {
+        setStatusModal({ ...statusModal, visible: false });
         setLoading(true);
         try {
             const ticketsToBook = event.tickets
@@ -67,18 +68,26 @@ const BookingModal = ({ visible, onClose, event, onBookingComplete, readOnly = f
             });
 
             if (response.data.success) {
-                const msg = `Booking Confirmed!\nBooking ID: ${response.data.booking.bookingId}`;
-                if (Platform.OS === 'web') {
-                    window.alert(msg);
-                } else {
-                    Alert.alert('Success', msg);
-                }
-                onBookingComplete();
-                onClose();
-                setSelectedTickets({});
+                setStatusModal({
+                    visible: true,
+                    type: 'success',
+                    title: 'Booking Confirmed!',
+                    message: `Your booking ID is ${response.data.booking.bookingId}. We look forward to seeing you!`,
+                    onConfirm: () => {
+                        setStatusModal({ visible: false });
+                        onBookingComplete();
+                        onClose();
+                        setSelectedTickets({});
+                    }
+                });
             }
         } catch (error) {
-            Alert.alert('Booking Failed', error.response?.data?.error || 'Something went wrong');
+            setStatusModal({
+                visible: true,
+                type: 'error',
+                title: 'Booking Failed',
+                message: error.response?.data?.error || 'Something went wrong while processing your booking.'
+            });
         } finally {
             setLoading(false);
         }
@@ -167,6 +176,14 @@ const BookingModal = ({ visible, onClose, event, onBookingComplete, readOnly = f
                     )}
                 </View>
             </View>
+            <StatusModal 
+                visible={statusModal.visible}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                onConfirm={statusModal.onConfirm}
+                onClose={() => setStatusModal({ ...statusModal, visible: false })}
+            />
         </Modal>
     );
 };

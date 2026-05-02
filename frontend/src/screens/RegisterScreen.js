@@ -1,45 +1,46 @@
 import React, { useState } from 'react';
 import { 
     StyleSheet, Text, View, TextInput, TouchableOpacity, 
-    Alert, ActivityIndicator, KeyboardAvoidingView, ScrollView, Platform, SafeAreaView, StatusBar
+    ActivityIndicator, KeyboardAvoidingView, ScrollView, Platform, SafeAreaView, StatusBar
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import axiosInstance from '../api/axios';
+import StatusModal from '../components/StatusModal';
 
 const RegisterScreen = ({ navigation }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [statusModal, setStatusModal] = useState({ visible: false, type: '', title: '', message: '', onConfirm: null });
 
     const handleRegister = async () => {
         if (!name || !email || !password) {
-            Alert.alert('Error', 'Please fill all fields');
-            return;
-        }
-
-        if (password.length < 6) {
-            Alert.alert('Error', 'Password must be at least 6 characters');
+            setStatusModal({ visible: true, type: 'error', title: 'Registration Failed', message: 'Please fill all fields to create an account.' });
             return;
         }
 
         setLoading(true);
         try {
-            const response = await axiosInstance.post('/auth/register', { 
-                name: name.trim(), 
-                email: email.trim().toLowerCase(), 
-                password: password.trim() 
+            const response = await axiosInstance.post('/auth/register', { name, email, password });
+            const { token, user } = response.data;
+
+            await AsyncStorage.setItem('token', token);
+            await AsyncStorage.setItem('user', JSON.stringify(user));
+
+            setStatusModal({
+                visible: true,
+                type: 'success',
+                title: 'Welcome!',
+                message: 'Your account has been created successfully.',
+                onConfirm: () => navigation.replace('UserPortal')
             });
-            
-            Alert.alert(
-                'Success', 
-                'Account created successfully! Please login.',
-                [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-            );
         } catch (error) {
-            console.error('Register Error:', error);
-            const errorMessage = error.response?.data?.error || 'Registration failed. Try a different email.';
-            Alert.alert('Registration Failed', errorMessage);
+            console.error('Registration Error:', error);
+            const errorMessage = error.response?.data?.error || 'Failed to create account. Please try again.';
+            setStatusModal({ visible: true, type: 'error', title: 'Registration Error', message: errorMessage });
         } finally {
             setLoading(false);
         }
@@ -121,6 +122,14 @@ const RegisterScreen = ({ navigation }) => {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+            <StatusModal 
+                visible={statusModal.visible}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                onConfirm={statusModal.onConfirm}
+                onClose={() => setStatusModal({ ...statusModal, visible: false })}
+            />
         </SafeAreaView>
     );
 };
