@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import axiosInstance from '../api/axios';
 import EventCard from '../components/EventCard';
+import BookingModal from '../components/BookingModal';
 import { ActivityIndicator, TextInput } from 'react-native';
 
 const UserPortal = ({ navigation }) => {
@@ -12,6 +13,9 @@ const UserPortal = ({ navigation }) => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+    const [isReadOnly, setIsReadOnly] = useState(false);
 
     useEffect(() => {
         const getUser = async () => {
@@ -38,6 +42,18 @@ const UserPortal = ({ navigation }) => {
             fetchEvents();
         }
     }, [activeTab]);
+
+    const openBooking = (event) => {
+        setSelectedEvent(event);
+        setIsReadOnly(false);
+        setIsBookingModalOpen(true);
+    };
+
+    const openDetails = (event) => {
+        setSelectedEvent(event);
+        setIsReadOnly(true);
+        setIsBookingModalOpen(true);
+    };
 
     const handleLogout = async () => {
         await AsyncStorage.removeItem('token');
@@ -102,7 +118,8 @@ const UserPortal = ({ navigation }) => {
                                         key={event._id}
                                         event={event}
                                         isAdmin={false}
-                                        onBook={(e) => Alert.alert('Booking', 'Booking flow coming soon for: ' + e.title)}
+                                        onBook={openBooking}
+                                        onView={openDetails}
                                     />
                                 ))}
                                 {events.length === 0 && (
@@ -150,6 +167,14 @@ const UserPortal = ({ navigation }) => {
                 <NavItem name="Events" icon="calendar-outline" />
                 <NavItem name="My account" icon="person-outline" />
             </View>
+
+            <BookingModal 
+                visible={isBookingModalOpen}
+                onClose={() => setIsBookingModalOpen(false)}
+                event={selectedEvent}
+                onBookingComplete={fetchEvents}
+                readOnly={isReadOnly}
+            />
         </SafeAreaView>
     );
 };

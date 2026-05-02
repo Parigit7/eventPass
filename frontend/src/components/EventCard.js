@@ -54,10 +54,30 @@ const EventCard = ({ event, eventType, onEdit, onDelete, onView, isAdmin = true,
                             </TouchableOpacity>
                         )
                     ) : (
-                        <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={() => onBook(event)}>
-                            <Ionicons name="ticket-outline" size={18} color="#000" />
-                            <Text style={styles.btnText}>Book Now</Text>
-                        </TouchableOpacity>
+                        <View style={{ width: '100%' }}>
+                            {event.tickets.reduce((acc, t) => acc + t.remainingQuantity, 0) === 0 ? (
+                                <View style={[styles.actionBtn, { backgroundColor: '#333' }]}>
+                                    <Text style={[styles.btnText, { color: '#888' }]}>SOLD OUT</Text>
+                                </View>
+                            ) : (
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <TouchableOpacity 
+                                        style={[styles.actionBtn, styles.viewBtn]} 
+                                        onPress={() => onView(event)}
+                                    >
+                                        <Ionicons name="eye-outline" size={18} color="#FFF" />
+                                        <Text style={[styles.btnText, { color: '#FFF' }]}>Details</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[styles.actionBtn, styles.editBtn]} 
+                                        onPress={() => onBook(event)}
+                                    >
+                                        <Ionicons name="ticket-outline" size={18} color="#000" />
+                                        <Text style={styles.btnText}>Book Now</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
                     )}
                 </View>
             </View>
