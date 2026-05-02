@@ -33,14 +33,20 @@ const BookingModal = ({ visible, onClose, event, onBookingComplete, readOnly = f
             return;
         }
 
-        Alert.alert(
-            'Confirm Booking',
-            `Are you sure you want to book these tickets for a total of Rs. ${total}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Confirm', onPress: processBooking }
-            ]
-        );
+        if (Platform.OS === 'web') {
+            if (window.confirm(`Are you sure you want to book these tickets for a total of Rs. ${total}?`)) {
+                processBooking();
+            }
+        } else {
+            Alert.alert(
+                'Confirm Booking',
+                `Are you sure you want to book these tickets for a total of Rs. ${total}?`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Confirm', onPress: processBooking }
+                ]
+            );
+        }
     };
 
     const processBooking = async () => {
@@ -61,7 +67,12 @@ const BookingModal = ({ visible, onClose, event, onBookingComplete, readOnly = f
             });
 
             if (response.data.success) {
-                Alert.alert('Success', `Booking Confirmed!\nBooking ID: ${response.data.booking.bookingId}`);
+                const msg = `Booking Confirmed!\nBooking ID: ${response.data.booking.bookingId}`;
+                if (Platform.OS === 'web') {
+                    window.alert(msg);
+                } else {
+                    Alert.alert('Success', msg);
+                }
                 onBookingComplete();
                 onClose();
                 setSelectedTickets({});

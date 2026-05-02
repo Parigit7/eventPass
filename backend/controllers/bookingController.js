@@ -43,6 +43,7 @@ exports.createBooking = async (req, res) => {
         await event.save();
 
         // 3. Create the booking
+        console.log(`Creating booking for user ${req.user.id} and event ${eventId}`);
         const booking = await Booking.create({
             user: req.user.id,
             event: eventId,
@@ -50,6 +51,7 @@ exports.createBooking = async (req, res) => {
             tickets,
             totalPrice
         });
+        console.log(`Booking created successfully: ${booking.bookingId}`);
 
         res.status(201).json({
             success: true,
