@@ -15,6 +15,14 @@ app.use(express.json());
 app.use(cors());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/uploads', express.static('uploads'));
+
+// Error Handler
+app.use((err, req, res, next) => {
+    console.error('SERVER ERROR:', err);
+    res.status(500).json({ error: err.message || 'Server Error' });
+});
 
 const PORT = process.env.PORT || 5000;
 

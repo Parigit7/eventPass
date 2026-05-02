@@ -105,28 +105,35 @@ const AdminPortal = ({ navigation }) => {
         formData.append('tickets', JSON.stringify(tickets));
 
         if (image && !image.startsWith('http')) {
-            const filename = image.split('/').pop();
-            const match = /\.(\w+)$/.exec(filename);
-            const type = match ? `image/${match[1]}` : `image`;
-            formData.append('image', { uri: image, name: filename, type });
+            if (Platform.OS === 'web') {
+                try {
+                    const response = await fetch(image);
+                    const blob = await response.blob();
+                    formData.append('image', blob, 'event_banner.jpg');
+                } catch (e) {
+                    console.error('Image upload failed', e);
+                }
+            } else {
+                const filename = image.split('/').pop();
+                const match = /\.(\w+)$/.exec(filename);
+                const type = match ? `image/${match[1]}` : `image`;
+                formData.append('image', { uri: image, name: filename, type });
+            }
         }
 
         try {
             if (editingEvent) {
-                await axiosInstance.put(`/events/${editingEvent._id}`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                await axiosInstance.put(`/events/${editingEvent._id}`, formData);
                 Alert.alert('Success', 'Event updated successfully');
             } else {
-                await axiosInstance.post('/events', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                await axiosInstance.post('/events', formData);
                 Alert.alert('Success', 'Event created successfully');
             }
             setIsModalOpen(false);
             resetForm();
             fetchEvents();
         } catch (error) {
+            console.error(error.response?.data);
             Alert.alert('Error', error.response?.data?.error || 'Something went wrong');
         } finally {
             setModalLoading(false);
@@ -338,19 +345,40 @@ const AdminPortal = ({ navigation }) => {
                         <TextInput style={styles.modalInput} value={title} onChangeText={setTitle} placeholder="Concert, Festival, etc." placeholderTextColor="#444" />
 
                         <Text style={styles.modalLabel}>Date</Text>
-                        <TouchableOpacity style={styles.modalInput} onPress={() => setShowDatePicker(true)}>
-                            <Text style={{ color: '#FFF' }}>{date.toLocaleDateString()}</Text>
-                        </TouchableOpacity>
-                        {showDatePicker && (
-                            <DateTimePicker
-                                value={date}
-                                mode="date"
-                                minimumDate={new Date(Date.now() + 86400000)}
-                                onChange={(e, selectedDate) => {
-                                    setShowDatePicker(false);
-                                    if (selectedDate) setDate(selectedDate);
+                        {Platform.OS === 'web' ? (
+                            <input 
+                                type="date" 
+                                value={date.toISOString().split('T')[0]} 
+                                onChange={(e) => setDate(new Date(e.target.value))}
+                                style={{
+                                    backgroundColor: '#1A1A1A',
+                                    borderRadius: '12px',
+                                    padding: '15px',
+                                    color: '#FFF',
+                                    marginBottom: '20px',
+                                    border: '1px solid #333',
+                                    width: '100%',
+                                    outline: 'none',
+                                    fontFamily: 'inherit'
                                 }}
+                                min="1900-01-01"
                             />
+                        ) : (
+                            <>
+                                <TouchableOpacity style={styles.modalInput} onPress={() => setShowDatePicker(true)}>
+                                    <Text style={{ color: '#FFF' }}>{date.toLocaleDateString()}</Text>
+                                </TouchableOpacity>
+                                {showDatePicker && (
+                                    <DateTimePicker
+                                        value={date}
+                                        mode="date"
+                                        onChange={(e, selectedDate) => {
+                                            setShowDatePicker(false);
+                                            if (selectedDate) setDate(selectedDate);
+                                        }}
+                                    />
+                                )}
+                            </>
                         )}
 
                         <Text style={styles.modalLabel}>Location</Text>
@@ -367,35 +395,45 @@ const AdminPortal = ({ navigation }) => {
                                 </TouchableOpacity>
                             </View>
                             {tickets.map((t, index) => (
-                                <View key={index} style={styles.ticketRow}>
-                                    <TextInput 
-                                        style={[styles.modalInput, { flex: 2, marginBottom: 0 }]} 
-                                        value={t.type} 
-                                        onChangeText={(v) => updateTicketRow(index, 'type', v)}
-                                        placeholder="Standard"
-                                        placeholderTextColor="#444"
-                                    />
-                                    <TextInput 
-                                        style={[styles.modalInput, { flex: 1, marginBottom: 0 }]} 
-                                        value={t.price} 
-                                        onChangeText={(v) => updateTicketRow(index, 'price', v)}
-                                        placeholder="Price"
-                                        placeholderTextColor="#444"
-                                        keyboardType="numeric"
-                                    />
-                                    <TextInput 
-                                        style={[styles.modalInput, { flex: 1, marginBottom: 0 }]} 
-                                        value={t.quantity} 
-                                        onChangeText={(v) => updateTicketRow(index, 'quantity', v)}
-                                        placeholder="Qty"
-                                        placeholderTextColor="#444"
-                                        keyboardType="numeric"
-                                    />
-                                    {tickets.length > 1 && (
-                                        <TouchableOpacity onPress={() => removeTicketRow(index)}>
-                                            <Ionicons name="trash-outline" size={20} color="#f44336" />
-                                        </TouchableOpacity>
-                                    )}
+                                <View key={index} style={styles.ticketCard}>
+                                    <View style={styles.ticketTopRow}>
+                                        <TextInput 
+                                            style={[styles.modalInput, styles.ticketNameInput]} 
+                                            value={t.type} 
+                                            onChangeText={(v) => updateTicketRow(index, 'type', v)}
+                                            placeholder="Ticket Name (e.g. VIP)"
+                                            placeholderTextColor="#444"
+                                        />
+                                        {tickets.length > 1 && (
+                                            <TouchableOpacity onPress={() => removeTicketRow(index)} style={styles.removeBtn}>
+                                                <Ionicons name="close-circle" size={24} color="#f44336" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                    <View style={styles.ticketBottomRow}>
+                                        <View style={styles.priceContainer}>
+                                            <Text style={styles.inputPrefix}>$</Text>
+                                            <TextInput 
+                                                style={[styles.modalInput, styles.ticketSubInput]} 
+                                                value={t.price} 
+                                                onChangeText={(v) => updateTicketRow(index, 'price', v)}
+                                                placeholder="Price"
+                                                placeholderTextColor="#444"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={styles.qtyContainer}>
+                                            <Text style={styles.inputPrefix}>Qty</Text>
+                                            <TextInput 
+                                                style={[styles.modalInput, styles.ticketSubInput]} 
+                                                value={t.quantity} 
+                                                onChangeText={(v) => updateTicketRow(index, 'quantity', v)}
+                                                placeholder="Quantity"
+                                                placeholderTextColor="#444"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
                                 </View>
                             ))}
                         </View>
@@ -467,7 +505,15 @@ const styles = StyleSheet.create({
     modalInput: { backgroundColor: '#1A1A1A', borderRadius: 12, padding: 15, color: '#FFF', marginBottom: 20, borderWidth: 1, borderColor: '#333', justifyContent: 'center' },
     ticketSection: { marginTop: 10 },
     ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    ticketRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    ticketCard: { backgroundColor: '#111', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#222' },
+    ticketTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+    ticketNameInput: { flex: 1, marginBottom: 0, height: 45 },
+    ticketBottomRow: { flexDirection: 'row', gap: 10 },
+    priceContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderRadius: 12, borderWidth: 1, borderColor: '#333', paddingLeft: 12 },
+    qtyContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderRadius: 12, borderWidth: 1, borderColor: '#333', paddingLeft: 12 },
+    inputPrefix: { color: '#FFD301', fontSize: 14, fontWeight: 'bold' },
+    ticketSubInput: { flex: 1, backgroundColor: 'transparent', borderWidth: 0, marginBottom: 0, height: 45, paddingLeft: 8 },
+    removeBtn: { padding: 5 },
 
     // Bottom Nav Styles
     bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, backgroundColor: '#0A0A0A', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#222', paddingBottom: 15 },

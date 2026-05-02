@@ -3,30 +3,49 @@ const Event = require('../models/Event');
 // Create Event
 exports.createEvent = async (req, res) => {
     try {
+        console.log('--- Create Event Request ---');
+        console.log('Body:', req.body);
+        console.log('File:', req.file);
+
         const { title, date, location, description, tickets } = req.body;
         
+        if (!title || !date || !location || !description) {
+            return res.status(400).json({ error: 'Title, Date, Location, and Description are required' });
+        }
+
         // Parse tickets if they come as string
-        const parsedTickets = typeof tickets === 'string' ? JSON.parse(tickets) : tickets;
+        let parsedTickets = [];
+        try {
+            parsedTickets = typeof tickets === 'string' ? JSON.parse(tickets) : tickets;
+            if (!Array.isArray(parsedTickets)) parsedTickets = [];
+        } catch (e) {
+            console.error('Ticket parsing failed:', e);
+            return res.status(400).json({ error: 'Invalid tickets format' });
+        }
         
         // Add remainingQuantity same as initial quantity
         const ticketsWithRemaining = parsedTickets.map(t => ({
             ...t,
-            remainingQuantity: t.quantity
+            price: Number(t.price) || 0,
+            quantity: Number(t.quantity) || 0,
+            remainingQuantity: Number(t.quantity) || 0
         }));
 
         const newEvent = new Event({
             title,
-            date,
+            date: new Date(date),
             location,
             description,
             tickets: ticketsWithRemaining,
             image: req.file ? `/uploads/${req.file.filename}` : null,
-            createdBy: req.user.id
+            createdBy: req.user._id
         });
 
         await newEvent.save();
+        console.log('Event Created Successfully:', newEvent._id);
         res.status(201).json(newEvent);
     } catch (error) {
+        console.error('Create Event Error:', error);
         res.status(500).json({ error: error.message });
     }
 };
