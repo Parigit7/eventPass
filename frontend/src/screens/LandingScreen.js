@@ -140,8 +140,11 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        boxShadow: '0px 10px 20px rgba(255, 211, 1, 0.3)',
-        elevation: 8,
+        elevation: 10,
+        shadowColor: '#FFD301',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
     },
     loginButtonText: {
         color: '#000000',
