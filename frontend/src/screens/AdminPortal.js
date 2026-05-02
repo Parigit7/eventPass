@@ -423,7 +423,19 @@ const styles = StyleSheet.create({
     filterTabText: { color: '#888', fontSize: 12, fontWeight: 'bold' },
     filterTabTextActive: { color: '#000' },
     eventList: { flex: 1, marginBottom: 90 },
-    fab: { position: 'absolute', bottom: 100, right: 0, width: 60, height: 60, backgroundColor: '#FFD301', borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: '#FFD301', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+    fab: { 
+        position: 'absolute', 
+        bottom: 100, 
+        right: 0, 
+        width: 60, 
+        height: 60, 
+        backgroundColor: '#FFD301', 
+        borderRadius: 30, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        elevation: 5, 
+        boxShadow: '0px 4px 8px rgba(255, 211, 1, 0.3)' 
+    },
     placeholderContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
     placeholderText: { color: '#444', fontSize: 16, marginTop: 15 },
     

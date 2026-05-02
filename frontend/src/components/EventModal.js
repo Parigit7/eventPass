@@ -225,8 +225,6 @@ const styles = StyleSheet.create({
         borderColor: '#333',
         width: '100%',
         fontSize: 14,
-        outline: 'none',
-        fontFamily: 'inherit'
     },
     dateTimeRow: { flexDirection: 'row', gap: 15 },
     manualInputContainer: { flexDirection: 'row', alignItems: 'center', position: 'relative', marginBottom: 20 },
