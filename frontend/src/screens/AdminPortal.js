@@ -128,6 +128,17 @@ const AdminPortal = ({ navigation }) => {
             finalDate = parsed;
         }
 
+        // Validate date is tomorrow or later
+        const tomorrow = new Date();
+        tomorrow.setHours(0, 0, 0, 0);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        if (finalDate < tomorrow) {
+            Alert.alert('Error', 'Please select a date for tomorrow or later');
+            setModalLoading(false);
+            return;
+        }
+
         formData.append('title', title);
         formData.append('date', finalDate.toISOString());
         formData.append('time', time);

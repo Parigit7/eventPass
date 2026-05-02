@@ -13,6 +13,15 @@ exports.createEvent = async (req, res) => {
             return res.status(400).json({ error: 'Title, Date, Location, and Description are required' });
         }
 
+        const eventDate = new Date(date);
+        const tomorrow = new Date();
+        tomorrow.setHours(0, 0, 0, 0);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        if (eventDate < tomorrow) {
+            return res.status(400).json({ error: 'Event date must be tomorrow or later' });
+        }
+
         // Parse tickets if they come as string
         let parsedTickets = [];
         try {

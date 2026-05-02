@@ -73,8 +73,13 @@ const EventModal = ({
                                         <TouchableOpacity 
                                             style={styles.pickerIconBtn} 
                                             onPress={() => {
+                                                const tomorrow = new Date();
+                                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                                const minDate = tomorrow.toISOString().split('T')[0];
+
                                                 const input = document.createElement('input');
                                                 input.type = 'date';
+                                                input.min = minDate;
                                                 input.onchange = (e) => setDate(new Date(e.target.value));
                                                 input.showPicker();
                                             }}
