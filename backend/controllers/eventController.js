@@ -108,15 +108,26 @@ exports.updateEvent = async (req, res) => {
         if (tickets) {
             const parsedTickets = typeof tickets === 'string' ? JSON.parse(tickets) : tickets;
             
+            // Validate first: Ensure new total isn't less than already sold
+            for (const newTicket of parsedTickets) {
+                const existingTicket = event.tickets.find(et => et.type === newTicket.type);
+                if (existingTicket) {
+                    const soldCount = existingTicket.quantity - existingTicket.remainingQuantity;
+                    if (parseInt(newTicket.quantity) < soldCount) {
+                        return res.status(400).json({ 
+                            error: `This number of (${soldCount}) ${newTicket.type} tickets already sold` 
+                        });
+                    }
+                }
+            }
+
             // Smart update for tickets to preserve sold counts
             event.tickets = parsedTickets.map(newTicket => {
-                // Find if this ticket type already existed
                 const existingTicket = event.tickets.find(et => et.type === newTicket.type);
                 
                 if (existingTicket) {
                     const soldCount = existingTicket.quantity - existingTicket.remainingQuantity;
                     const newTotal = parseInt(newTicket.quantity);
-                    // New remaining is the new total minus what was already sold
                     const newRemaining = Math.max(0, newTotal - soldCount);
                     
                     return {
@@ -125,7 +136,6 @@ exports.updateEvent = async (req, res) => {
                         remainingQuantity: newRemaining
                     };
                 } else {
-                    // New ticket type, remaining equals total
                     return {
                         ...newTicket,
                         quantity: parseInt(newTicket.quantity),
