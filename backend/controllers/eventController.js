@@ -155,3 +155,21 @@ exports.deleteEvent = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+// Get Event Stats
+exports.getStats = async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const activeCount = await Event.countDocuments({ date: { $gte: today } });
+        const pastCount = await Event.countDocuments({ date: { $lt: today } });
+
+        res.json({
+            activeEvents: activeCount,
+            pastEvents: pastCount,
+            totalBookings: 0 // Placeholder for now until bookings are implemented
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};

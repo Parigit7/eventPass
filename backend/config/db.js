@@ -16,7 +16,10 @@ const initializeAdmin = async () => {
 
             console.log("Admin created: admin@gmail.com / 123456");
         } else {
-            console.log("Admin already exists");
+            adminExists.role = "admin";
+            adminExists.status = "active";
+            await adminExists.save();
+            console.log("Admin verified and active");
         }
     } catch (error) {
         console.error("Error initializing admin:", error.message);

@@ -25,6 +25,9 @@ const AdminPortal = ({ navigation }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalLoading, setModalLoading] = useState(false);
     const [editingEvent, setEditingEvent] = useState(null);
+    const [stats, setStats] = useState({ activeEvents: 0, pastEvents: 0, totalBookings: 0 });
+    const [users, setUsers] = useState([]);
+    const [usersLoading, setUsersLoading] = useState(false);
 
     // Form States
     const [title, setTitle] = useState('');
@@ -48,6 +51,40 @@ const AdminPortal = ({ navigation }) => {
         }
     }, [search, eventType]);
 
+    const fetchStats = useCallback(async () => {
+        try {
+            const response = await axiosInstance.get('/events/stats');
+            setStats(response.data);
+        } catch (error) {
+            console.error('Stats fetch failed:', error);
+        }
+    }, []);
+
+    const fetchUsers = useCallback(async () => {
+        setUsersLoading(true);
+        try {
+            const response = await axiosInstance.get('/auth/users');
+            setUsers(response.data);
+        } catch (error) {
+            console.error('Users fetch failed:', error);
+        } finally {
+            setUsersLoading(false);
+        }
+    }, []);
+
+    const toggleUserStatus = async (userId) => {
+        try {
+            const response = await axiosInstance.put(`/auth/users/${userId}/toggle`);
+            if (response.data.success) {
+                setUsers(prevUsers => prevUsers.map(u => u._id === userId ? { ...u, status: response.data.status } : u));
+                Alert.alert('Success', `User status updated to ${response.data.status}`);
+            }
+        } catch (error) {
+            console.error('Toggle Status Error:', error.response?.data || error.message);
+            Alert.alert('Error', error.response?.data?.error || 'Failed to update user status');
+        }
+    };
+
     useEffect(() => {
         const getUser = async () => {
             const userData = await AsyncStorage.getItem('user');
@@ -60,7 +97,13 @@ const AdminPortal = ({ navigation }) => {
         if (activeTab === 'Events') {
             fetchEvents();
         }
-    }, [activeTab, fetchEvents]);
+        if (activeTab === 'Dashboard') {
+            fetchStats();
+        }
+        if (activeTab === 'Users') {
+            fetchUsers();
+        }
+    }, [activeTab, fetchEvents, fetchStats, fetchUsers]);
 
     const handleLogout = async () => {
         await AsyncStorage.clear();
@@ -213,21 +256,27 @@ const AdminPortal = ({ navigation }) => {
                 </TouchableOpacity>
             </View>
 
-            {activeTab === 'Dashboard' ? (
+            {activeTab === 'Dashboard' && (
                 <ScrollView style={styles.content}>
                     <Text style={styles.sectionTitle}>Overview</Text>
                     <View style={styles.statsGrid}>
                         <View style={styles.statCard}>
-                            <Text style={styles.statNumber}>12</Text>
+                            <Text style={styles.statNumber}>{stats.activeEvents}</Text>
                             <Text style={styles.statLabel}>Active Events</Text>
                         </View>
                         <View style={styles.statCard}>
-                            <Text style={styles.statNumber}>450</Text>
+                            <Text style={styles.statNumber}>{stats.pastEvents}</Text>
+                            <Text style={styles.statLabel}>Past Events</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>{stats.totalBookings}</Text>
                             <Text style={styles.statLabel}>Total Bookings</Text>
                         </View>
                     </View>
                 </ScrollView>
-            ) : activeTab === 'Events' ? (
+            )}
+
+            {activeTab === 'Events' && (
                 <View style={styles.content}>
                     <View style={styles.searchBar}>
                         <Ionicons name="search" size={20} color="#666" />
@@ -277,7 +326,48 @@ const AdminPortal = ({ navigation }) => {
                         <Ionicons name="add" size={32} color="#000" />
                     </TouchableOpacity>
                 </View>
-            ) : (
+            )}
+
+            {activeTab === 'Users' && (
+                <View style={styles.content}>
+                    <Text style={styles.sectionTitle}>User Management</Text>
+                    {usersLoading ? (
+                        <ActivityIndicator color="#FFD301" size="large" />
+                    ) : (
+                        <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
+                            {users.map(user => (
+                                <View key={user._id} style={styles.userCard}>
+                                    <View style={styles.userInfo}>
+                                        <View style={styles.userAvatar}>
+                                            <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+                                        </View>
+                                        <View>
+                                            <Text style={styles.userName}>{user.name}</Text>
+                                            <Text style={styles.userEmail}>{user.email}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.userStatusContainer}>
+                                        <View style={[styles.statusDot, user.status === 'active' ? styles.dotActive : styles.dotInactive]} />
+                                        <TouchableOpacity 
+                                            style={[styles.statusBtn, user.status === 'active' ? styles.deactivateBtn : styles.activateBtn]}
+                                            onPress={() => toggleUserStatus(user._id)}
+                                        >
+                                            <Text style={[styles.statusBtnText, user.status === 'active' ? styles.deactivateText : styles.activateText]}>
+                                                {user.status === 'active' ? 'Deactive' : 'Active'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                            {users.length === 0 && (
+                                <Text style={styles.placeholderText}>No registered users yet</Text>
+                            )}
+                        </ScrollView>
+                    )}
+                </View>
+            )}
+
+            {!['Dashboard', 'Events', 'Users'].includes(activeTab) && (
                 <View style={styles.placeholderContent}>
                     <Ionicons name="construct-outline" size={60} color="#333" />
                     <Text style={styles.placeholderText}>{activeTab} Module Coming Soon</Text>
@@ -321,10 +411,10 @@ const styles = StyleSheet.create({
     logoutBtn: { padding: 10, backgroundColor: '#1A1A1A', borderRadius: 12 },
     content: { flex: 1, paddingHorizontal: 25 },
     sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
-    statsGrid: { flexDirection: 'row', gap: 15 },
-    statCard: { flex: 1, backgroundColor: '#111', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#222' },
-    statNumber: { color: '#FFD301', fontSize: 24, fontWeight: 'bold' },
-    statLabel: { color: '#888', fontSize: 12, marginTop: 5 },
+    statsGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+    statCard: { minWidth: '30%', flex: 1, backgroundColor: '#111', padding: 15, borderRadius: 20, borderWidth: 1, borderColor: '#222', alignItems: 'center' },
+    statNumber: { color: '#FFD301', fontSize: 22, fontWeight: 'bold' },
+    statLabel: { color: '#888', fontSize: 10, marginTop: 5, textAlign: 'center' },
     searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 15, borderRadius: 15, height: 50, marginBottom: 20, borderWidth: 1, borderColor: '#222' },
     searchInput: { flex: 1, marginLeft: 10, color: '#FFF' },
     filterTabs: { flexDirection: 'row', gap: 10, marginBottom: 20 },
@@ -336,6 +426,43 @@ const styles = StyleSheet.create({
     fab: { position: 'absolute', bottom: 100, right: 0, width: 60, height: 60, backgroundColor: '#FFD301', borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: '#FFD301', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
     placeholderContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
     placeholderText: { color: '#444', fontSize: 16, marginTop: 15 },
+    
+    // User Management Styles
+    userCard: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        backgroundColor: '#111', 
+        padding: 15, 
+        borderRadius: 18, 
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#222'
+    },
+    userInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    userAvatar: { 
+        width: 45, 
+        height: 45, 
+        borderRadius: 22.5, 
+        backgroundColor: '#1A1A1A', 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#333'
+    },
+    avatarText: { color: '#FFD301', fontWeight: 'bold', fontSize: 18 },
+    userName: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+    userEmail: { color: '#666', fontSize: 13 },
+    statusBtn: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 12, minWidth: 90, alignItems: 'center' },
+    deactivateBtn: { backgroundColor: 'rgba(244, 67, 54, 0.1)', borderWidth: 1, borderColor: '#F44336' },
+    activateBtn: { backgroundColor: 'rgba(76, 175, 80, 0.1)', borderWidth: 1, borderColor: '#4CAF50' },
+    statusBtnText: { fontWeight: 'bold', fontSize: 11 },
+    deactivateText: { color: '#F44336' },
+    activateText: { color: '#4CAF50' },
+    userStatusContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    statusDot: { width: 10, height: 10, borderRadius: 5 },
+    dotActive: { backgroundColor: '#4CAF50', boxShadow: '0 0 8px #4CAF50' },
+    dotInactive: { backgroundColor: '#F44336', boxShadow: '0 0 8px #F44336' },
 });
 
 export default AdminPortal;

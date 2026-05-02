@@ -44,16 +44,25 @@ exports.login = async (req, res, next) => {
         const user = await User.findOne({ email }).select('+password');
 
         if (!user) {
+            console.log('Login Result: FAILED - User not found');
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+
+        // Check if user is active
+        if (user.status === 'deactive') {
+            console.log('Login Result: BLOCKED - Account deactive');
+            return res.status(403).json({ success: false, error: 'Account is deactive. Please contact admin.' });
         }
 
         // Check if password matches
         const isMatch = await user.matchPassword(password);
 
         if (!isMatch) {
+            console.log('Login Result: FAILED - Wrong password');
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
+        console.log('Login Result: SUCCESS');
         sendTokenResponse(user, 200, res);
     } catch (error) {
         res.status(400).json({
@@ -80,4 +89,38 @@ const sendTokenResponse = (user, statusCode, res) => {
             role: user.role
         }
     });
+};
+
+// @desc    Get all users (Admin only)
+// @route   GET /api/auth/users
+exports.getUsers = async (req, res) => {
+    try {
+        const users = await User.find({ role: 'user' }).sort('-createdAt');
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// @desc    Toggle user status (Admin only)
+// @route   PUT /api/auth/users/:id/toggle
+exports.toggleUserStatus = async (req, res) => {
+    try {
+        console.log(`--- Status Toggle Attempt for User ID: ${req.params.id} ---`);
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            console.log('Status Toggle: FAILED - User not found');
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const oldStatus = user.status;
+        user.status = user.status === 'active' ? 'deactive' : 'active';
+        await user.save();
+
+        console.log(`Status Toggle: SUCCESS - ${oldStatus} -> ${user.status}`);
+        res.json({ success: true, status: user.status });
+    } catch (error) {
+        console.error('Status Toggle: ERROR', error.message);
+        res.status(500).json({ error: error.message });
+    }
 };
