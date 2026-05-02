@@ -248,8 +248,8 @@ const AdminPortal = ({ navigation }) => {
             <StatusBar barStyle="light-content" />
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.welcomeText}>Hello Admin,</Text>
-                    <Text style={styles.adminName}>{user?.name || 'Manager'}</Text>
+                    <Text style={styles.welcomeText}>Hello,</Text>
+                    <Text style={styles.adminName}>{user?.name || 'Admin'}</Text>
                 </View>
                 <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                     <Ionicons name="log-out-outline" size={20} color="#FFD301" />
