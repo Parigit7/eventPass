@@ -113,7 +113,7 @@ const AdminPortal = ({ navigation }) => {
 
     const pickImage = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaType.Images,
+            mediaTypes: 'images',
             allowsEditing: true,
             aspect: [16, 9],
             quality: 0.8,
@@ -226,22 +226,27 @@ const AdminPortal = ({ navigation }) => {
         }
     };
 
-    const handleDelete = (id) => {
-        Alert.alert('Delete Event', 'Are you sure you want to delete this event?', [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-                text: 'Delete', 
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await axiosInstance.delete(`/events/${id}`);
-                        fetchEvents();
-                    } catch (error) {
-                        Alert.alert('Error', error.response?.data?.error || 'Failed to delete');
-                    }
-                }
+    const handleDelete = async (id) => {
+        const performDelete = async () => {
+            try {
+                await axiosInstance.delete(`/events/${id}`);
+                fetchEvents();
+            } catch (error) {
+                console.error('Delete error:', error.response?.data);
+                Alert.alert('Error', error.response?.data?.error || 'Failed to delete');
             }
-        ]);
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm('Are you sure you want to delete this event?')) {
+                performDelete();
+            }
+        } else {
+            Alert.alert('Delete Event', 'Are you sure you want to delete this event?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: performDelete }
+            ]);
+        }
     };
 
     return (
