@@ -101,8 +101,11 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         borderWidth: 1, 
         borderColor: '#222',
-        elevation: 5,
-        boxShadow: '0px 10px 15px rgba(0,0,0,0.3)',
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.4,
+        shadowRadius: 15,
     },
     eventImage: { 
         width: '100%', 

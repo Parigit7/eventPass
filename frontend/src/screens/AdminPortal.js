@@ -612,15 +612,18 @@ const styles = StyleSheet.create({
     fab: { 
         position: 'absolute', 
         bottom: 100, 
-        right: 0, 
-        width: 60, 
-        height: 60, 
+        right: 25, 
+        width: 65, 
+        height: 65, 
+        borderRadius: 20, 
         backgroundColor: '#FFD301', 
-        borderRadius: 30, 
         justifyContent: 'center', 
-        alignItems: 'center', 
-        elevation: 5, 
-        boxShadow: '0px 4px 8px rgba(255, 211, 1, 0.3)' 
+        alignItems: 'center',
+        elevation: 8,
+        shadowColor: '#FFD301',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8
     },
     placeholderContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
     placeholderText: { color: '#444', fontSize: 16, marginTop: 15 },
@@ -715,7 +718,11 @@ const styles = StyleSheet.create({
         marginBottom: 16, 
         borderWidth: 1, 
         borderColor: '#222',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10
     },
     userCardMain: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 20 },
     userAvatarContainer: { position: 'relative' },
