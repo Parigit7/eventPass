@@ -1,7 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.8.182:5000/api';
+// const API_URL = 'http://192.168.8.182:5000/api';
+const API_URL = 'https://eventpass-hdh4.onrender.com/api';
 
 const axiosInstance = axios.create({
     baseURL: API_URL,
